@@ -1,0 +1,87 @@
+/* Citation Links */
+
+/* Inline citations (Live Preview widget and Reading Mode anchors) */
+.citation-links-part {
+	cursor: var(--cursor-link);
+}
+
+/* Obsidian marks links without a target note as unresolved; a known citekey is not an error. */
+.markdown-rendered a.citation-links-part.is-unresolved:not(.citation-links-unknown),
+.markdown-source-view .citation-links-part.is-unresolved:not(.citation-links-unknown) {
+	color: var(--link-color);
+	opacity: 1;
+	filter: none;
+	text-decoration-color: var(--link-decoration-color);
+	text-decoration-style: var(--link-decoration);
+}
+
+/* Citekeys that are not in the bibliography */
+.citation-links-unknown,
+.markdown-rendered a.citation-links-unknown,
+.markdown-source-view .citation-links-unknown {
+	color: var(--text-error);
+	text-decoration: underline dotted;
+	text-decoration-color: var(--text-error);
+	text-underline-offset: 2px;
+}
+
+/* Reference list view */
+.citation-links-view-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--size-4-2);
+	padding-bottom: var(--size-4-2);
+	border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.citation-links-view-title {
+	font-weight: var(--font-semibold);
+	font-size: var(--font-ui-small);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	color: var(--text-muted);
+}
+
+.citation-links-entry {
+	padding: var(--size-4-3) 0;
+	border-bottom: 1px solid var(--background-modifier-border);
+	font-size: var(--font-ui-small);
+	line-height: var(--line-height-normal);
+}
+
+.citation-links-entry .csl-entry {
+	padding-left: 1.5em;
+	text-indent: -1.5em;
+	overflow-wrap: anywhere;
+}
+
+.citation-links-entry-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: var(--size-4-2);
+	margin-top: var(--size-4-2);
+}
+
+.citation-links-entry-button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+	padding: var(--size-2-1) var(--size-4-2);
+}
+
+.citation-links-entry-icon {
+	display: inline-flex;
+	--icon-size: var(--icon-xs);
+}
+
+/* Autocompletion */
+.citation-links-suggestion-key {
+	font-weight: var(--font-medium);
+}
+
+.citation-links-suggestion-label {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-muted);
+}
