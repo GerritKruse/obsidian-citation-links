@@ -1,0 +1,13 @@
+[
+	{
+		"id": "Foo2020",
+		"type": "article-journal",
+		"title": "Foo Title"
+	},
+	{
+		"id": "internal123",
+		"citation-key": "Bar2020",
+		"type": "article-journal",
+		"title": "Bar Title"
+	}
+]

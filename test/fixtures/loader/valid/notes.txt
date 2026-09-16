@@ -1,0 +1,1 @@
+This file must be ignored by the loader because it does not end in .json.

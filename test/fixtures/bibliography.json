@@ -1,0 +1,189 @@
+[
+	{
+		"id": "GartenbergEtAl2026",
+		"author": [
+			{
+				"family": "Gartenberg",
+				"given": "Claudine"
+			},
+			{
+				"family": "Hasan",
+				"given": "Sharique"
+			},
+			{
+				"family": "Murray",
+				"given": "Alex"
+			},
+			{
+				"family": "Pierce",
+				"given": "Lamar"
+			}
+		],
+		"citation-key": "GartenbergEtAl2026",
+		"container-title": "Organization Science",
+		"container-title-short": "Organization Science",
+		"DOI": "10.1287/orsc.2026.ed.v37.n3",
+		"ISSN": "1047-7039, 1526-5455",
+		"issue": "3",
+		"issued": {
+			"date-parts": [
+				[
+					"2026",
+					5
+				]
+			]
+		},
+		"language": "en",
+		"page": "795–812",
+		"title": "More Versus Better: Artificial Intelligence, Incentives, and the Emerging Crisis in Peer Review",
+		"title-short": "More Versus Better",
+		"type": "article-journal",
+		"URL": "https://pubsonline.informs.org/doi/10.1287/orsc.2026.ed.v37.n3",
+		"volume": "37"
+	},
+	{
+		"id": "MiricEtAl2023",
+		"author": [
+			{
+				"family": "Miric",
+				"given": "Milan"
+			},
+			{
+				"family": "Jia",
+				"given": "Nan"
+			},
+			{
+				"family": "Huang",
+				"given": "Kenneth G."
+			}
+		],
+		"citation-key": "MiricEtAl2023",
+		"container-title": "Strategic Management Journal",
+		"DOI": "10.1002/smj.3441",
+		"ISSN": "1097-0266",
+		"issue": "2",
+		"issued": {
+			"date-parts": [
+				[
+					"2023"
+				]
+			]
+		},
+		"language": "en",
+		"license": "© 2022 The Authors. Strategic Management Journal published by John Wiley & Sons Ltd.",
+		"page": "491–519",
+		"title": "Using supervised machine learning for large-scale classification in management research: The case for identifying artificial intelligence patents",
+		"title-short": "Using supervised machine learning for large-scale classification in management research",
+		"type": "article-journal",
+		"URL": "https://onlinelibrary.wiley.com/doi/abs/10.1002/smj.3441",
+		"volume": "44"
+	},
+	{
+		"id": "MiricOzalp2026",
+		"author": [
+			{
+				"family": "Miric",
+				"given": "Milan"
+			},
+			{
+				"family": "Ozalp",
+				"given": "Hakan"
+			}
+		],
+		"citation-key": "MiricOzalp2026",
+		"container-title": "MIS Quarterly",
+		"DOI": "10.25300/misq/2026/17887",
+		"ISSN": "0276-7783",
+		"issued": {
+			"date-parts": [
+				[
+					"2026",
+					1,
+					31
+				]
+			]
+		},
+		"page": "1–21",
+		"publisher": "MIS Quarterly",
+		"title": "Technology Diffusion, Human Capital and Employee Mobility",
+		"type": "article-journal",
+		"URL": "https://doi.org/10.25300/misq/2026/17887"
+	},
+	{
+		"id": "NoAuthor2025",
+		"citation-key": "NoAuthor2025",
+		"type": "post-weblog",
+		"title": "8 digital trends in healthcare in 2025",
+		"container-title": "Some Blog",
+		"issued": {
+			"date-parts": [
+				[
+					"2025",
+					1,
+					15
+				]
+			]
+		},
+		"URL": "https://example.org/trends"
+	},
+	{
+		"id": "SmithA2020",
+		"citation-key": "SmithA2020",
+		"type": "article-journal",
+		"title": "Alpha paper",
+		"author": [
+			{
+				"family": "Smith",
+				"given": "John"
+			},
+			{
+				"family": "Doe",
+				"given": "Ann"
+			},
+			{
+				"family": "Roe",
+				"given": "Bob"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2020"
+				]
+			]
+		},
+		"container-title": "Journal of Tests",
+		"volume": "1",
+		"page": "1–10"
+	},
+	{
+		"id": "SmithB2020",
+		"citation-key": "SmithB2020",
+		"type": "article-journal",
+		"title": "Beta paper",
+		"author": [
+			{
+				"family": "Smith",
+				"given": "John"
+			},
+			{
+				"family": "Doe",
+				"given": "Ann"
+			},
+			{
+				"family": "Roe",
+				"given": "Bob"
+			}
+		],
+		"issued": {
+			"date-parts": [
+				[
+					"2020"
+				]
+			]
+		},
+		"container-title": "Journal of Tests",
+		"volume": "2",
+		"page": "11–20"
+	}
+]

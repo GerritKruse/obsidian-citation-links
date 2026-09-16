@@ -1,0 +1,16 @@
+[
+	{
+		"type": "article-journal",
+		"title": "No id title"
+	},
+	{
+		"id": 42,
+		"type": "article-journal",
+		"title": "Numeric id"
+	},
+	{
+		"id": "Valid2020",
+		"type": "article-journal",
+		"title": "Valid title"
+	}
+]
