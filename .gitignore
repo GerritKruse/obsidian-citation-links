@@ -141,3 +141,10 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Obsidian plugin build output and local dev files
+main.js
+.hotreload
+data.json
+scratch/
+.DS_Store
