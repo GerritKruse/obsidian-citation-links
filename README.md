@@ -225,3 +225,7 @@ To cut a release, bump `version` in `manifest.json` and `versions.json` and push
 ## License
 
 Citation Links is released under the MIT license, see [LICENSE](LICENSE). It bundles citeproc-js and CSL style/locale files under their own licenses – see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Disclaimer
+
+The code in this repository was written entirely by Claude Code, Anthropic's agentic coding tool, working from a specification by the repository owner, who reviewed and tested the result but did not write the code by hand. The architecture (a bibliography read from Better BibTeX exports, citeproc-js for formatting, a CodeMirror view plugin for Live Preview, a Markdown post-processor for Reading mode, and a sidebar reference list) is closely inspired by [Pandoc Reference List](https://github.com/mgmeyers/obsidian-pandoc-reference-list) by mgmeyers; no code was copied from it. This note is here for transparency.
