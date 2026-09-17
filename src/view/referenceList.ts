@@ -110,6 +110,18 @@ export class ReferenceListView extends ItemView {
 		const entry = container.createDiv({ cls: 'citation-links-entry' });
 		const body = entry.createDiv({ cls: 'citation-links-entry-text' });
 		appendHtml(body, html);
+		body.addEventListener('click', (evt) => {
+			const target = evt.target;
+			if (!(target instanceof Element)) {
+				return;
+			}
+			const anchor = target.closest('a.citation-links-entry-link');
+			if (anchor instanceof HTMLAnchorElement) {
+				evt.preventDefault();
+				evt.stopPropagation();
+				openExternal(anchor.href);
+			}
+		});
 
 		const actions = entry.createDiv({ cls: 'citation-links-entry-actions' });
 		const zotero = actions.createEl('button', { cls: 'citation-links-entry-button', text: 'Zotero' });
@@ -187,8 +199,39 @@ function applyZoteroState(button: HTMLButtonElement, link: ZoteroLink): void {
 	}
 }
 
-/** Append citeproc's HTML (`<div class="csl-entry">` with `<i>` tags) without innerHTML. */
+/**
+ * Append citeproc's HTML (`<div class="csl-entry">` with `<i>` tags) without innerHTML, rebuilding every
+ * anchor first: citeproc escapes `&`, `<`, `>` but not `"`, so an unescaped quote in a CSL URL/DOI field
+ * could otherwise smuggle extra attributes (or a non-http(s) protocol) into the DOM.
+ */
 function appendHtml(target: HTMLElement, html: string): void {
 	const parsed = new DOMParser().parseFromString(html, 'text/html');
+	for (const anchor of Array.from(parsed.body.querySelectorAll('a'))) {
+		const href = anchor.getAttribute('href') ?? '';
+		const text = anchor.textContent ?? '';
+		if (!isExternalHttpUrl(href)) {
+			anchor.replaceWith(document.createTextNode(text));
+			continue;
+		}
+		// Detached element (global createEl) that replaces the anchor inside the parsed tree before the
+		// whole tree is appended to target; only these attributes survive.
+		const fresh = createEl('a', {
+			cls: 'citation-links-entry-link external-link',
+			text: text.length > 0 ? text : href,
+			attr: { href, target: '_blank', rel: 'noopener nofollow' },
+		});
+		setTooltip(fresh, 'Open in browser');
+		anchor.replaceWith(fresh);
+	}
 	target.append(...Array.from(parsed.body.childNodes));
+}
+
+/** True only for a well-formed http(s) URL; anything unparsable or on another protocol (e.g. `javascript:`) is rejected. */
+function isExternalHttpUrl(href: string): boolean {
+	try {
+		const { protocol } = new URL(href);
+		return protocol === 'http:' || protocol === 'https:';
+	} catch {
+		return false;
+	}
 }

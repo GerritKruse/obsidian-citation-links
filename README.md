@@ -129,6 +129,8 @@ The "References" view in the right sidebar lists every work cited in the active 
 - **Zotero** – opens the exact item in Zotero, in whichever library it lives in (your personal library or a group library). This needs Zotero running with the Better BibTeX add-on; if it is not reachable, the button shows a notice instead of a link. If the citekey is not known to any Zotero library, the button is disabled, with a tooltip saying so.
 - **Open note** / **Create note** – opens the literature note, creating it first if it does not exist yet.
 
+DOIs (shown as https://doi.org/… links) and URLs, when present, are clickable and open in your default browser.
+
 Open the view with the quote icon in the left ribbon, the "Show reference list" command, or the "Reference list" setting, which keeps it open across restarts (default on).
 
 ## Autocomplete

@@ -170,7 +170,7 @@ describe('Formatter', () => {
 			}
 			const gartenberg = entries.find((e) => e.citekey === 'GartenbergEtAl2026');
 			expect(gartenberg?.html).toContain(
-				'Gartenberg, C., Hasan, S., Murray, A., &#38; Pierce, L. (2026). More Versus Better: Artificial Intelligence, Incentives, and the Emerging Crisis in Peer Review. <i>Organization Science</i>, <i>37</i>(3), 795–812. https://doi.org/10.1287/orsc.2026.ed.v37.n3',
+				'Gartenberg, C., Hasan, S., Murray, A., &#38; Pierce, L. (2026). More Versus Better: Artificial Intelligence, Incentives, and the Emerging Crisis in Peer Review. <i>Organization Science</i>, <i>37</i>(3), 795–812. <a href="https://doi.org/10.1287/orsc.2026.ed.v37.n3">https://doi.org/10.1287/orsc.2026.ed.v37.n3</a>',
 			);
 		});
 
@@ -179,11 +179,77 @@ describe('Formatter', () => {
 			expect(formatter.bibliography([])).toEqual([]);
 		});
 
+		it('wraps a URL in an anchor when the item has no DOI', () => {
+			const entries = formatter.bibliography(['NoAuthor2025']);
+			const entry = entries.find((e) => e.citekey === 'NoAuthor2025');
+			expect(entry?.html).toContain('<a href="https://example.org/trends">https://example.org/trends</a>');
+			expect(entry?.html).not.toContain('https://doi.org');
+		});
+
+		it('renders no anchor when the item has neither DOI nor URL', () => {
+			const entries = formatter.bibliography(['SmithA2020']);
+			const entry = entries.find((e) => e.citekey === 'SmithA2020');
+			expect(entry?.html).not.toContain('<a ');
+		});
+
+		it('prefers the DOI anchor over the URL when the item has both', () => {
+			const entries = formatter.bibliography(['MiricEtAl2023']);
+			const entry = entries.find((e) => e.citekey === 'MiricEtAl2023');
+			expect(entry?.html).toContain('<a href="https://doi.org/10.1002/smj.3441">https://doi.org/10.1002/smj.3441</a>');
+			expect(entry?.html?.match(/<a /g)).toHaveLength(1);
+			expect(entry?.html).not.toContain('onlinelibrary.wiley.com');
+		});
+
+		it('canonicalises a DOI stored with a resolver prefix', () => {
+			const base = fixtureItems.find((item) => item.id === 'GartenbergEtAl2026');
+			expect(base).toBeDefined();
+			const custom = new Formatter({ styleXml, locales: { 'en-US': localeXml } });
+			custom.setItems(
+				itemsMap([
+					{ ...base, id: 'DxDoi2026', 'citation-key': 'DxDoi2026', DOI: 'http://dx.doi.org/10.1234/x' },
+					{ ...base, id: 'FullDoi2026', 'citation-key': 'FullDoi2026', DOI: 'https://doi.org/10.1234/y' },
+				] as CslItem[]),
+			);
+			const entries = custom.bibliography(['DxDoi2026', 'FullDoi2026']);
+			expect(entries.find((e) => e.citekey === 'DxDoi2026')?.html).toContain(
+				'<a href="https://doi.org/10.1234/x">https://doi.org/10.1234/x</a>',
+			);
+			expect(entries.find((e) => e.citekey === 'FullDoi2026')?.html).toContain(
+				'<a href="https://doi.org/10.1234/y">https://doi.org/10.1234/y</a>',
+			);
+		});
+
+		it('percent-encodes double quotes so DOI and URL values cannot break out of the href attribute', () => {
+			const base = fixtureItems.find((item) => item.id === 'GartenbergEtAl2026');
+			const web = fixtureItems.find((item) => item.id === 'NoAuthor2025');
+			expect(base).toBeDefined();
+			expect(web).toBeDefined();
+			const custom = new Formatter({ styleXml, locales: { 'en-US': localeXml } });
+			custom.setItems(
+				itemsMap([
+					{ ...base, id: 'QuoteDoi2026', 'citation-key': 'QuoteDoi2026', DOI: '10.1234/x" onmouseover="alert(1)' },
+					{ ...web, id: 'QuoteUrl2025', 'citation-key': 'QuoteUrl2025', URL: 'https://example.org/a" onclick="alert(1)' },
+				] as CslItem[]),
+			);
+			for (const entry of custom.bibliography(['QuoteDoi2026', 'QuoteUrl2025'])) {
+				expect(entry.html).toContain('%22');
+				// The opening tag carries exactly one attribute, href, whose quoted value contains no raw quote;
+				// citeproc escapes ">" as "&#62;", so the tag cannot end early.
+				const openingTag = /<a [^>]*>/.exec(entry.html)?.[0];
+				expect(openingTag).toMatch(/^<a href="[^"]*">$/);
+			}
+		});
+
 		it('restores text output mode afterwards', () => {
 			formatter.bibliography(['GartenbergEtAl2026']);
 			const result = formatter.citePart(paren('GartenbergEtAl2026'));
 			expect(result.text).not.toMatch(/[<>]/);
 			expect(result.text).toBe('Gartenberg et al., 2026');
+
+			const group = formatter.citeGroup([paren('MiricEtAl2023'), paren('GartenbergEtAl2026')]);
+			for (const part of group.parts) {
+				expect(part.text).not.toContain('<a');
+			}
 		});
 	});
 

@@ -34,5 +34,7 @@ declare module 'citeproc' {
 		updateItems(ids: string[]): void;
 		makeCitationCluster(items: CiteItem[]): string;
 		makeBibliography(): [BibliographyMeta, string[]] | false;
+		/** Documented development-extension switches; only `wrap_url_and_doi` is used here. */
+		opt: { development_extensions: { wrap_url_and_doi: boolean } };
 	}
 }

@@ -125,6 +125,18 @@ body {
 	overflow-wrap: anywhere;
 }
 
+.citation-links-entry-link {
+	color: var(--link-external-color);
+	text-decoration-line: var(--link-external-decoration);
+	overflow-wrap: anywhere;
+	cursor: var(--cursor-link);
+}
+
+.citation-links-entry-link:hover {
+	color: var(--link-external-color-hover);
+	text-decoration-line: var(--link-external-decoration-hover);
+}
+
 .citation-links-entry-actions {
 	display: flex;
 	justify-content: flex-end;

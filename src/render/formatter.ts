@@ -39,6 +39,26 @@ function stripParens(text: string): string {
 	return result;
 }
 
+/** Resolver prefixes that Zotero records sometimes carry in the DOI field. */
+const DOI_RESOLVER_PREFIX = /^https?:\/\/(?:dx\.)?doi\.org\//i;
+
+/**
+ * Canonical DOI and URL values for citeproc: the DOI is reduced to its bare
+ * form so the style's own "https://doi.org/" prefix applies uniformly, and
+ * double quotes are percent-encoded because citeproc's html escaping leaves
+ * `"` untouched while placing the value inside an href attribute.
+ */
+function normaliseLinkFields(item: CslItem): { DOI?: string; URL?: string } {
+	const out: { DOI?: string; URL?: string } = {};
+	if (typeof item.DOI === 'string') {
+		out.DOI = item.DOI.trim().replace(DOI_RESOLVER_PREFIX, '').replace(/"/g, '%22');
+	}
+	if (typeof item.URL === 'string') {
+		out.URL = item.URL.trim().replace(/"/g, '%22');
+	}
+	return out;
+}
+
 /** Builds the citeproc locator/label pair for a `CiteItem`, when present. */
 function locatorParams(locator: Locator | undefined): { locator?: string; label?: string } {
 	if (!locator) {
@@ -74,11 +94,19 @@ export class Formatter {
 				if (!item) {
 					return undefined;
 				}
-				return { ...item, id };
+				return { ...item, id, ...normaliseLinkFields(item) };
 			},
 		};
 
 		this.engine = new CSL.Engine(sys, options.styleXml, this.lang);
+		// Documented citeproc-js development extension; affects the html output
+		// used for bibliography entries only, wrapping DOIs (as
+		// https://doi.org/… links) and URLs in <a> tags. The text output used
+		// for in-text citations is unchanged. DOI and URL values are normalised
+		// in retrieveItem (see normaliseLinkFields) so the href is always a
+		// canonical, quote-free value; the reference list view additionally
+		// rebuilds these anchors before inserting them into the DOM.
+		this.engine.opt.development_extensions.wrap_url_and_doi = true;
 		this.engine.setOutputFormat('text');
 	}
 
