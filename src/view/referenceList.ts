@@ -1,9 +1,13 @@
-import { ItemView, Keymap, MarkdownView, Notice, requestUrl, setIcon, TFile, debounce, type WorkspaceLeaf } from 'obsidian';
+import { ItemView, Keymap, MarkdownView, Notice, setIcon, setTooltip, TFile, debounce, type WorkspaceLeaf } from 'obsidian';
 import type { CitationLinksContext } from '../context';
 import { collectCitedKeys } from '../parser';
-import { openExternal, resolveZoteroSelectUrl } from '../zotero/select';
+import { nodeHttpRequest } from '../zotero/http';
+import { openExternal, prefetchZoteroLinks, resolveZoteroSelectUrl, type ZoteroLink, type ZoteroLinkDeps } from '../zotero/select';
 
 export const REFERENCE_VIEW_TYPE = 'citation-links-references';
+
+/** Zotero's local server drops requests with an Origin header, so plain Node HTTP is used instead of requestUrl. */
+const ZOTERO_DEPS: ZoteroLinkDeps = { request: nodeHttpRequest };
 
 /**
  * Right sidebar view listing the works cited in the active note as an APA
@@ -11,6 +15,8 @@ export const REFERENCE_VIEW_TYPE = 'citation-links-references';
  */
 export class ReferenceListView extends ItemView {
 	private currentFile: TFile | null = null;
+	/** Incremented per render so late Zotero lookups do not touch a newer list. */
+	private renderGeneration = 0;
 
 	readonly scheduleRefresh = debounce(
 		() => {
@@ -58,6 +64,7 @@ export class ReferenceListView extends ItemView {
 		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
 		const file = activeView?.file ?? this.currentFile;
 		this.currentFile = file;
+		const generation = ++this.renderGeneration;
 		const { contentEl } = this;
 		contentEl.empty();
 		this.renderHeader(contentEl);
@@ -71,6 +78,9 @@ export class ReferenceListView extends ItemView {
 			return;
 		}
 		const text = await this.app.vault.cachedRead(file);
+		if (generation !== this.renderGeneration) {
+			return;
+		}
 		const citedKeys = collectCitedKeys(text);
 		const entries = this.context.formatter.bibliography(citedKeys);
 		if (entries.length === 0) {
@@ -78,9 +88,11 @@ export class ReferenceListView extends ItemView {
 			return;
 		}
 		const list = contentEl.createDiv({ cls: 'citation-links-entries' });
+		const zoteroButtons = new Map<string, HTMLButtonElement>();
 		for (const entry of entries) {
-			this.renderEntry(list, entry.citekey, entry.html, file.path);
+			zoteroButtons.set(entry.citekey, this.renderEntry(list, entry.citekey, entry.html, file.path));
 		}
+		void this.prefetchZoteroLinks(zoteroButtons, generation);
 	}
 
 	private renderHeader(container: HTMLElement): void {
@@ -93,7 +105,8 @@ export class ReferenceListView extends ItemView {
 		});
 	}
 
-	private renderEntry(container: HTMLElement, citekey: string, html: string, sourcePath: string): void {
+	/** Renders one entry and returns its Zotero button so its state can be updated later. */
+	private renderEntry(container: HTMLElement, citekey: string, html: string, sourcePath: string): HTMLButtonElement {
 		const entry = container.createDiv({ cls: 'citation-links-entry' });
 		const body = entry.createDiv({ cls: 'citation-links-entry-text' });
 		appendHtml(body, html);
@@ -101,8 +114,9 @@ export class ReferenceListView extends ItemView {
 		const actions = entry.createDiv({ cls: 'citation-links-entry-actions' });
 		const zotero = actions.createEl('button', { cls: 'citation-links-entry-button', text: 'Zotero' });
 		setIcon(zotero.createSpan({ cls: 'citation-links-entry-icon' }), 'external-link');
+		setTooltip(zotero, 'Open in Zotero');
 		zotero.addEventListener('click', () => {
-			void this.openInZotero(citekey);
+			void this.openInZotero(citekey, zotero);
 		});
 
 		const linkpath = `@${citekey}`;
@@ -115,15 +129,61 @@ export class ReferenceListView extends ItemView {
 		note.addEventListener('click', (evt) => {
 			void this.context.openNote(citekey, linkpath, sourcePath, Keymap.isModEvent(evt)).then(() => this.scheduleRefresh());
 		});
+		return zotero;
 	}
 
-	private async openInZotero(citekey: string): Promise<void> {
-		const item = this.context.bibliography.get(citekey);
-		const link = await resolveZoteroSelectUrl(citekey, item, { request: requestUrl });
-		if (!link.exact) {
-			new Notice('Zotero is not running; the link can only resolve items in "My Library"');
+	/** Resolve all Zotero links in the background so buttons reflect availability before the first click. */
+	private async prefetchZoteroLinks(buttons: Map<string, HTMLButtonElement>, generation: number): Promise<void> {
+		const links = await prefetchZoteroLinks(
+			Array.from(buttons.keys()),
+			(citekey) => this.context.bibliography.get(citekey),
+			ZOTERO_DEPS,
+		);
+		if (generation !== this.renderGeneration) {
+			return;
 		}
-		openExternal(link.url);
+		for (const [citekey, button] of buttons) {
+			const link = links.get(citekey);
+			if (link !== undefined) {
+				applyZoteroState(button, link);
+			}
+		}
+	}
+
+	private async openInZotero(citekey: string, button: HTMLButtonElement): Promise<void> {
+		const item = this.context.bibliography.get(citekey);
+		const link = await resolveZoteroSelectUrl(citekey, item, ZOTERO_DEPS);
+		applyZoteroState(button, link);
+		switch (link.status) {
+			case 'exact':
+				if (link.url !== null) {
+					openExternal(link.url);
+				}
+				return;
+			case 'not-found':
+				new Notice(`Citation Links: "${citekey}" was not found in any Zotero library`);
+				return;
+			case 'unreachable':
+				new Notice('Citation Links: Zotero with Better BibTeX is not running. Start Zotero and try again.');
+				return;
+		}
+	}
+}
+
+function applyZoteroState(button: HTMLButtonElement, link: ZoteroLink): void {
+	switch (link.status) {
+		case 'exact':
+			button.disabled = false;
+			setTooltip(button, link.library !== undefined ? `Open in Zotero (${link.library})` : 'Open in Zotero');
+			return;
+		case 'not-found':
+			button.disabled = true;
+			setTooltip(button, 'Not found in any Zotero library');
+			return;
+		case 'unreachable':
+			button.disabled = false;
+			setTooltip(button, 'Zotero is not running');
+			return;
 	}
 }
 

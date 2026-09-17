@@ -1,11 +1,11 @@
-import type { EditorView } from '@codemirror/view';
+import type { EditorView, ViewPlugin } from '@codemirror/view';
 import { MarkdownView, Notice, Plugin, type PaneType } from 'obsidian';
 import { DEFAULT_LANG, LOCALES, STYLE_XML } from './assets';
 import { Bibliography } from './bibliography';
 import { HOVER_SOURCE_ID, type CitationLinksContext } from './context';
 import { buildDebugReport } from './debug';
 import { bibliographyChanged, bibliographyVersionField } from './editor/state';
-import { createCitationViewPlugin } from './editor/viewPlugin';
+import { createCitationViewPlugin, type CitationViewPluginValue } from './editor/viewPlugin';
 import { openOrCreateLiteratureNote } from './notes';
 import { createPostProcessor } from './reading/postProcessor';
 import { Formatter } from './render/formatter';
@@ -18,6 +18,7 @@ export default class CitationLinksPlugin extends Plugin {
 	formatter!: Formatter;
 	bibliography!: Bibliography;
 	context!: CitationLinksContext;
+	private viewPlugin!: ViewPlugin<CitationViewPluginValue>;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -40,7 +41,8 @@ export default class CitationLinksPlugin extends Plugin {
 			this.refreshViews();
 		});
 
-		this.registerEditorExtension([bibliographyVersionField, createCitationViewPlugin(this.context)]);
+		this.viewPlugin = createCitationViewPlugin(this.context);
+		this.registerEditorExtension([bibliographyVersionField, this.viewPlugin]);
 		this.registerMarkdownPostProcessor(createPostProcessor(this.context));
 		this.registerView(REFERENCE_VIEW_TYPE, (leaf) => new ReferenceListView(leaf, this.context));
 		this.registerEditorSuggest(new CitekeySuggest(this.app, this.context));
@@ -81,29 +83,24 @@ export default class CitationLinksPlugin extends Plugin {
 
 	async loadSettings(): Promise<void> {
 		const stored: unknown = await this.loadData();
-		this.settings = { ...DEFAULT_SETTINGS, ...(isRecord(stored) ? stored : {}) };
-		if (typeof this.settings.folder !== 'string') {
-			this.settings.folder = '';
-		}
-		if (typeof this.settings.autocomplete !== 'boolean') {
-			this.settings.autocomplete = DEFAULT_SETTINGS.autocomplete;
-		}
-		if (typeof this.settings.referenceListShown !== 'boolean') {
-			this.settings.referenceListShown = DEFAULT_SETTINGS.referenceListShown;
-		}
+		const record = isRecord(stored) ? stored : {};
+		this.settings = {
+			folder: typeof record.folder === 'string' ? record.folder : DEFAULT_SETTINGS.folder,
+			autocomplete: typeof record.autocomplete === 'boolean' ? record.autocomplete : DEFAULT_SETTINGS.autocomplete,
+			showReferenceList:
+				typeof record.showReferenceList === 'boolean' ? record.showReferenceList : DEFAULT_SETTINGS.showReferenceList,
+		};
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
 	}
 
-	/** Load the bibliography once the workspace exists and open the reference list on the first run. */
+	/** Load the bibliography once the workspace exists and make sure the reference list is present if wanted. */
 	private async start(): Promise<void> {
 		await this.applyFolder();
-		if (!this.settings.referenceListShown) {
-			this.settings.referenceListShown = true;
-			await this.saveSettings();
-			await this.activateReferenceList();
+		if (this.settings.showReferenceList) {
+			await this.ensureReferenceList();
 		}
 	}
 
@@ -126,7 +123,13 @@ export default class CitationLinksPlugin extends Plugin {
 	}
 
 	async copyDebugReport(): Promise<void> {
-		const report = buildDebugReport(this.app, this.bibliography, resolveFolder(this.settings.folder), this.manifest.version);
+		const report = buildDebugReport(
+			this.app,
+			this.bibliography,
+			resolveFolder(this.settings.folder),
+			this.manifest.version,
+			this.viewPlugin,
+		);
 		try {
 			await navigator.clipboard.writeText(report);
 		} catch (error) {
@@ -157,6 +160,19 @@ export default class CitationLinksPlugin extends Plugin {
 		}
 	}
 
+	/** Open the reference list in the right sidebar without stealing focus; no-op when it already exists. */
+	private async ensureReferenceList(): Promise<void> {
+		if (this.app.workspace.getLeavesOfType(REFERENCE_VIEW_TYPE).length > 0) {
+			return;
+		}
+		const leaf = this.app.workspace.getRightLeaf(false);
+		if (leaf === null) {
+			return;
+		}
+		await leaf.setViewState({ type: REFERENCE_VIEW_TYPE, active: false });
+	}
+
+	/** Open (if needed) and reveal the reference list. */
 	async activateReferenceList(): Promise<void> {
 		const existing = this.app.workspace.getLeavesOfType(REFERENCE_VIEW_TYPE)[0];
 		const leaf = existing ?? this.app.workspace.getRightLeaf(false);
@@ -167,6 +183,13 @@ export default class CitationLinksPlugin extends Plugin {
 			await leaf.setViewState({ type: REFERENCE_VIEW_TYPE, active: true });
 		}
 		await this.app.workspace.revealLeaf(leaf);
+	}
+
+	/** Close every reference list leaf (user-initiated through the setting). */
+	closeReferenceList(): void {
+		for (const leaf of this.app.workspace.getLeavesOfType(REFERENCE_VIEW_TYPE)) {
+			leaf.detach();
+		}
 	}
 }
 

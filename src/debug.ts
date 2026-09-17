@@ -1,14 +1,21 @@
 import { syntaxTree } from '@codemirror/language';
-import type { EditorView } from '@codemirror/view';
+import type { EditorView, ViewPlugin } from '@codemirror/view';
 import { MarkdownView, editorLivePreviewField, type App } from 'obsidian';
 import type { Bibliography } from './bibliography';
+import type { CitationViewPluginValue } from './editor/viewPlugin';
 import { groupDocumentRange } from './parser';
 
 /**
  * Plain-text diagnostics for bug reports: bibliography state plus, for the
- * active note, what the editor and the parser see. Read-only.
+ * active note, what the editor, the parser and the view plugin see. Read-only.
  */
-export function buildDebugReport(app: App, bibliography: Bibliography, folder: string, pluginVersion: string): string {
+export function buildDebugReport(
+	app: App,
+	bibliography: Bibliography,
+	folder: string,
+	pluginVersion: string,
+	viewPlugin: ViewPlugin<CitationViewPluginValue>,
+): string {
 	const lines: string[] = [];
 	lines.push(`Citation Links ${pluginVersion}`);
 	lines.push(`folder: ${folder || '(not set)'}`);
@@ -34,6 +41,7 @@ export function buildDebugReport(app: App, bibliography: Bibliography, folder: s
 	}
 	lines.push(`live preview field: ${String(cm.state.field(editorLivePreviewField, false))}`);
 	lines.push(`visible ranges: ${cm.visibleRanges.map((range) => `${range.from}-${range.to}`).join(', ') || '(none)'}`);
+	lines.push(`editor dom: connected=${String(cm.dom.isConnected)} height=${cm.dom.offsetHeight}`);
 	const first = groups[0];
 	if (first !== undefined) {
 		const line = cm.state.doc.line(first.line + 1);
@@ -42,5 +50,12 @@ export function buildDebugReport(app: App, bibliography: Bibliography, folder: s
 		lines.push(`first link token: "${node.type.name}" at ${pos}`);
 	}
 	lines.push(`rendered citations in editor DOM: ${cm.contentDOM.querySelectorAll('.citation-links-cite').length}`);
+
+	const instance = cm.plugin(viewPlugin);
+	if (instance === null) {
+		lines.push('view plugin: not installed in this editor');
+	} else {
+		lines.push(`view plugin: ${JSON.stringify(instance.diagnostics)}`);
+	}
 	return lines.join('\n');
 }

@@ -92,7 +92,7 @@ A citation link stays a normal Obsidian link to a note named `@<Citekey>.md`. Cl
 
 ## Reference list
 
-The "References" view in the right sidebar opens automatically the first time the plugin runs; afterwards use the quote icon in the left ribbon or the "Show reference list" command. It lists every work cited in the active note as an APA 7 bibliography, sorted alphabetically, and updates as you switch notes or edit citations. Each entry has a "Zotero" button and an "Open note" (or "Create note") button; there are no PDF links and no copy button.
+The "References" view in the right sidebar is opened automatically while the "Reference list" setting is on (default); turning it off closes the view. The quote icon in the left ribbon and the "Show reference list" command open it on demand. It lists every work cited in the active note as an APA 7 bibliography, sorted alphabetically, and updates as you switch notes or edit citations. Each entry has a "Zotero" button and an "Open note" (or "Create note") button; there are no PDF links and no copy button. The Zotero button selects the exact item in whichever library it lives in (personal or group); it is disabled, with a tooltip, when the citekey is not known to Zotero, and it tells you when Zotero is not running.
 
 ## Autocomplete
 
@@ -100,7 +100,7 @@ Typing `@` – optionally right after `[[` – suggests citekeys from the biblio
 
 ## How it works and privacy
 
-Citation Links parses CSL JSON files from the folder you configure and formats them with citeproc-js and a bundled APA 7 CSL style, entirely in memory – nothing is written back to that folder, and the parsed bibliography is never persisted anywhere else. The only network access the plugin makes is to `http://127.0.0.1:23119/better-bibtex/json-rpc`, Better BibTeX's local JSON-RPC endpoint, and only when you click a "Zotero" button: it calls `user.groups` and `item.export` to resolve the exact `zotero://select/...` link for that item, with a 2-second timeout. If Better BibTeX is not reachable, the plugin falls back to a citekey-based `zotero://select/...` link, which Better BibTeX can only resolve inside your default library, and shows a notice. This request never leaves your machine, and the plugin sends no telemetry.
+Citation Links parses CSL JSON files from the folder you configure and formats them with citeproc-js and a bundled APA 7 CSL style, entirely in memory – nothing is written back to that folder, and the parsed bibliography is never persisted anywhere else. The only network access the plugin makes is to `http://127.0.0.1:23119/better-bibtex/json-rpc`, Better BibTeX's local JSON-RPC endpoint, and only for the "Zotero" buttons of the reference list: it calls `user.groups` and `item.export` to resolve the exact `zotero://select/...` link of each listed item (personal and group libraries alike), with a 5-second timeout. The requests are sent with Node's HTTP client because Zotero's local server ignores browser-style requests that carry an `Origin` header. If Zotero is not running, the button shows a notice instead of guessing a link. This request never leaves your machine, and the plugin sends no telemetry.
 
 Because the configured CSL JSON folder is typically outside your vault, Citation Links reads files outside the vault – this is required for it to work and is disclosed here per Obsidian's developer policy.
 

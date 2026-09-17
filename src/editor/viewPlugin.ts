@@ -11,21 +11,42 @@ import { CitationWidget } from './widget';
 /**
  * Node-name fragments (case-insensitive substring match) that mark content
  * the citation renderer must leave alone: fenced/inline code, math, HTML
- * comments, escaped text and YAML frontmatter. Anything else - including an
- * unparsed tree, which reports an empty or "Document" node name - is treated
- * as renderable, since the positive `hmd-internal-link` check used to require
- * a fully parsed tree and left links unrendered until something else forced
- * a reparse.
+ * comments, escaped text and YAML frontmatter. Anything else, including an
+ * unparsed tree (empty or "Document" node name), is treated as renderable;
+ * the `treeChanged` trigger re-evaluates once parsing catches up.
  */
 const EXCLUDED_NODE_FRAGMENTS = ['code', 'math', 'comment', 'escape', 'frontmatter'];
 
 /**
+ * Delays for the safety-net rebuilds after the bibliography became available.
+ * They only fire while a note with citations still shows no decorations.
+ */
+const RETRY_DELAYS_MS = [300, 1000, 3000];
+
+/** Read-only counters exposed for the "Copy debug report" command. */
+export interface CitationViewPluginDiagnostics {
+	builds: number;
+	retries: number;
+	lastTrigger: string;
+	lastReady: boolean;
+	lastLivePreview: boolean;
+	lastVisibleRanges: string;
+	lastGroups: number;
+	lastExcluded: number;
+	lastSelected: number;
+	lastDecorations: number;
+	lastError: string | null;
+	citedKeys: number;
+}
+
+export interface CitationViewPluginValue {
+	decorations: DecorationSet;
+	readonly diagnostics: CitationViewPluginDiagnostics;
+}
+
+/**
  * True when `name` (a Lezer syntax node type name) signals content that must
  * not be rendered as a citation, such as `inline-code` or `hmd-frontmatter`.
- * An empty name or `Document` - both signs the tree has not been parsed for
- * this position yet - is never excluded, so unparsed content still renders;
- * the `treeChanged` check in `update()` re-evaluates once parsing catches up
- * and corrects any code/math span that was optimistically rendered.
  */
 export function isExcludedNodeName(name: string): boolean {
 	if (name === '' || name === 'Document') {
@@ -39,25 +60,42 @@ export function isExcludedNodeName(name: string): boolean {
  * Live Preview rendering of citation links. Decorations are rebuilt for the
  * visible ranges only; the formatter caches every rendered citation.
  */
-export function createCitationViewPlugin(context: CitationLinksContext) {
+export function createCitationViewPlugin(context: CitationLinksContext): ViewPlugin<CitationViewPluginValue> {
 	return ViewPlugin.fromClass(
-		class CitationViewPlugin {
+		class CitationViewPlugin implements CitationViewPluginValue {
 			decorations: DecorationSet;
+			readonly diagnostics: CitationViewPluginDiagnostics = {
+				builds: 0,
+				retries: 0,
+				lastTrigger: 'constructor',
+				lastReady: false,
+				lastLivePreview: false,
+				lastVisibleRanges: '',
+				lastGroups: 0,
+				lastExcluded: 0,
+				lastSelected: 0,
+				lastDecorations: 0,
+				lastError: null,
+				citedKeys: 0,
+			};
+
 			private citedKeys: string[];
 			private readonly unsubscribeBibliography: () => void;
 			private destroyed = false;
 			private reloadScheduled = false;
+			private retryTimers: number[] = [];
 
-			constructor(view: EditorView) {
+			constructor(private readonly view: EditorView) {
 				this.citedKeys = collectCitedKeys(view.state.doc.toString());
-				this.decorations = this.build(view);
-				// Each editor rebuilds itself once the bibliography is (re)loaded,
-				// instead of relying solely on `main.ts` reaching into the private
-				// `editor.cm` handle of every open leaf. This covers editors that
-				// were constructed while `context.bibliography.ready` was still
-				// false (the bibliography loads asynchronously after the editor
-				// extension is registered).
-				this.unsubscribeBibliography = context.bibliography.onChanged(() => this.scheduleBibliographyReload(view));
+				this.decorations = this.build(view, 'constructor');
+				// Each editor rebuilds itself once the bibliography is (re)loaded
+				// instead of relying on main.ts reaching the editor through the
+				// private `editor.cm` handle. Editors that were constructed while the
+				// bibliography was still loading are covered this way.
+				this.unsubscribeBibliography = context.bibliography.onChanged(() => this.scheduleBibliographyReload());
+				if (context.bibliography.ready) {
+					this.armRetries();
+				}
 			}
 
 			update(update: ViewUpdate): void {
@@ -69,56 +107,108 @@ export function createCitationViewPlugin(context: CitationLinksContext) {
 				const dragging = update.view.plugin(livePreviewState)?.mousedown ?? false;
 				const reloaded = update.transactions.some((tr) => tr.effects.some((effect) => effect.is(bibliographyChanged)));
 				const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
-				// After opening a note, the very first layout pass can land before
-				// any of the other triggers fire. If citations are known to exist
-				// but nothing was decorated yet, use that pass to render them.
+				// After opening a note the first layout pass can land before any other
+				// trigger fires; use it when citations exist but nothing is decorated yet.
 				const firstLayoutPending =
 					(update.geometryChanged || update.heightChanged) && this.decorations.size === 0 && this.citedKeys.length > 0;
-				if (
-					update.docChanged ||
-					update.viewportChanged ||
-					reloaded ||
-					treeChanged ||
-					livePreview !== wasLivePreview ||
-					(livePreview && update.selectionSet && !dragging) ||
-					firstLayoutPending
-				) {
-					this.decorations = this.build(update.view);
+
+				const trigger = update.docChanged
+					? 'docChanged'
+					: update.viewportChanged
+						? 'viewportChanged'
+						: reloaded
+							? 'bibliographyChanged'
+							: treeChanged
+								? 'treeChanged'
+								: livePreview !== wasLivePreview
+									? 'modeChanged'
+									: livePreview && update.selectionSet && !dragging
+										? 'selectionSet'
+										: firstLayoutPending
+											? 'firstLayout'
+											: null;
+				if (trigger !== null) {
+					this.decorations = this.build(update.view, trigger);
+					if (reloaded) {
+						this.armRetries();
+					}
 				}
 			}
 
 			destroy(): void {
 				this.destroyed = true;
 				this.unsubscribeBibliography();
+				this.clearRetries();
 			}
 
 			/**
-			 * Dispatching a new transaction synchronously from inside a
-			 * bibliography-change callback can run while CodeMirror is still
-			 * processing another update, which CodeMirror rejects. Deferring to
-			 * the next macrotask sidesteps that reentrancy.
+			 * Dispatching synchronously from inside a bibliography-change callback
+			 * could run while CodeMirror is still processing another update, which
+			 * it rejects. Deferring to the next macrotask sidesteps that reentrancy.
 			 */
-			private scheduleBibliographyReload(view: EditorView): void {
+			private scheduleBibliographyReload(): void {
 				if (this.reloadScheduled || this.destroyed) {
 					return;
 				}
 				this.reloadScheduled = true;
 				window.setTimeout(() => {
 					this.reloadScheduled = false;
-					if (this.destroyed) {
-						return;
+					if (!this.destroyed) {
+						this.view.dispatch({ effects: bibliographyChanged.of(context.bibliography.version) });
 					}
-					view.dispatch({ effects: bibliographyChanged.of(context.bibliography.version) });
 				}, 0);
 			}
 
-			private build(view: EditorView): DecorationSet {
+			/**
+			 * Safety net for the first render after start-up: if the note contains
+			 * citations but nothing is decorated, request another build a few times.
+			 */
+			private armRetries(): void {
+				this.clearRetries();
+				for (const delay of RETRY_DELAYS_MS) {
+					this.retryTimers.push(
+						window.setTimeout(() => {
+							if (this.destroyed || this.decorations.size > 0 || this.citedKeys.length === 0) {
+								return;
+							}
+							if (!context.bibliography.ready || !isLivePreview(this.view)) {
+								return;
+							}
+							this.diagnostics.retries += 1;
+							this.view.dispatch({ effects: bibliographyChanged.of(context.bibliography.version) });
+						}, delay),
+					);
+				}
+			}
+
+			private clearRetries(): void {
+				for (const timer of this.retryTimers) {
+					window.clearTimeout(timer);
+				}
+				this.retryTimers = [];
+			}
+
+			private build(view: EditorView, trigger: string): DecorationSet {
+				const { diagnostics } = this;
+				diagnostics.builds += 1;
+				diagnostics.lastTrigger = trigger;
+				diagnostics.lastReady = context.bibliography.ready;
+				diagnostics.lastLivePreview = isLivePreview(view);
+				diagnostics.lastVisibleRanges = view.visibleRanges.map((range) => `${range.from}-${range.to}`).join(', ');
+				diagnostics.lastGroups = 0;
+				diagnostics.lastExcluded = 0;
+				diagnostics.lastSelected = 0;
+				diagnostics.lastError = null;
+				diagnostics.citedKeys = this.citedKeys.length;
 				try {
-					return this.buildDecorations(view);
+					const decorations = this.buildDecorations(view);
+					diagnostics.lastDecorations = decorations.size;
+					return decorations;
 				} catch (error) {
-					// A view plugin that throws from `update`/its decoration builder
-					// is torn down by CodeMirror and never reinstated, which would
-					// look exactly like the permanent blank state this fix targets.
+					// A view plugin that throws is torn down by CodeMirror for good,
+					// which would look exactly like a permanently blank editor.
+					diagnostics.lastError = error instanceof Error ? error.message : String(error);
+					diagnostics.lastDecorations = 0;
 					console.error('[citation-links] Failed to build citation decorations', error);
 					return Decoration.none;
 				}
@@ -141,16 +231,15 @@ export function createCitationViewPlugin(context: CitationLinksContext) {
 						const line = state.doc.lineAt(pos);
 						if (line.from > processedTo) {
 							for (const group of groupLine(line.text)) {
+								this.diagnostics.lastGroups += 1;
 								const from = line.from + group.from;
 								const to = line.from + group.to;
-								if (
-									group.parts.some((part) =>
-										isExcludedNodeName(nodeNameAt(tree, line.from + part.from + 2)),
-									)
-								) {
+								if (group.parts.some((part) => isExcludedNodeName(nodeNameAt(tree, line.from + part.from + 2)))) {
+									this.diagnostics.lastExcluded += 1;
 									continue;
 								}
 								if (overlapsSelection(state.selection, from, to)) {
+									this.diagnostics.lastSelected += 1;
 									continue;
 								}
 								const rendered = formatter.citeGroup(

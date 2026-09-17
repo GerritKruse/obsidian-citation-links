@@ -9,14 +9,14 @@ export interface CitationLinksSettings {
 	folder: string;
 	/** Whether typing `@` suggests citekeys from the bibliography. */
 	autocomplete: boolean;
-	/** Internal: the reference list has been opened once automatically after installation. */
-	referenceListShown: boolean;
+	/** Whether the "References" view is kept open in the right sidebar. */
+	showReferenceList: boolean;
 }
 
 export const DEFAULT_SETTINGS: CitationLinksSettings = {
 	folder: '',
 	autocomplete: true,
-	referenceListShown: false,
+	showReferenceList: true,
 };
 
 /** Expand a leading `~` to the home directory and trim whitespace. */
@@ -46,7 +46,7 @@ export function validateFolder(folder: string): string | undefined {
 	return undefined;
 }
 
-/** Settings tab: the CSL JSON folder and the autocompletion toggle. */
+/** Settings tab: the CSL JSON folder, the autocompletion toggle and the reference list toggle. */
 export class CitationLinksSettingTab extends PluginSettingTab {
 	constructor(
 		app: App,
@@ -77,6 +77,14 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 					key: 'autocomplete',
 				},
 			},
+			{
+				name: 'Reference list',
+				desc: 'Keep the "References" view open in the right sidebar. Turning this off closes the view; the ribbon icon opens it again on demand.',
+				control: {
+					type: 'toggle',
+					key: 'showReferenceList',
+				},
+			},
 		];
 	}
 
@@ -86,6 +94,8 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 				return this.citationLinks.settings.folder;
 			case 'autocomplete':
 				return this.citationLinks.settings.autocomplete;
+			case 'showReferenceList':
+				return this.citationLinks.settings.showReferenceList;
 			default:
 				return undefined;
 		}
@@ -101,6 +111,15 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 			case 'autocomplete':
 				this.citationLinks.settings.autocomplete = value === true;
 				await this.citationLinks.saveSettings();
+				return;
+			case 'showReferenceList':
+				this.citationLinks.settings.showReferenceList = value === true;
+				await this.citationLinks.saveSettings();
+				if (value === true) {
+					await this.citationLinks.activateReferenceList();
+				} else {
+					this.citationLinks.closeReferenceList();
+				}
 				return;
 			default:
 				return;
