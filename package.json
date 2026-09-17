@@ -1,6 +1,6 @@
 {
 	"name": "citation-links",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Obsidian plugin that renders wikilinks to Better BibTeX citekeys as APA 7 in-text citations.",
 	"main": "main.js",
 	"type": "module",

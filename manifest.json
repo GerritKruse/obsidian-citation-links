@@ -1,7 +1,7 @@
 {
 	"id": "citation-links",
 	"name": "Citation Links",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"minAppVersion": "1.13.0",
 	"description": "Renders wikilinks to Better BibTeX citekeys as APA 7 in-text citations while keeping them clickable vault links.",
 	"author": "Gerrit Kruse",
