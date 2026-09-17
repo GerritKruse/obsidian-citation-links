@@ -13,6 +13,8 @@ export interface CitationLinksContext {
 	bibliography: Bibliography;
 	/** Open the literature note for a citekey, creating it in the vault root when missing. */
 	openNote(citekey: string, linkpath: string, sourcePath: string, paneType: PaneType | boolean): Promise<void>;
+	/** Current value of the autocompletion setting. */
+	isAutocompleteEnabled(): boolean;
 }
 
 /** Identifier used for `registerHoverLinkSource` and the `hover-link` event. */

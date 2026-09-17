@@ -3,6 +3,7 @@ import { MarkdownView, Notice, Plugin, type PaneType } from 'obsidian';
 import { DEFAULT_LANG, LOCALES, STYLE_XML } from './assets';
 import { Bibliography } from './bibliography';
 import { HOVER_SOURCE_ID, type CitationLinksContext } from './context';
+import { buildDebugReport } from './debug';
 import { bibliographyChanged, bibliographyVersionField } from './editor/state';
 import { createCitationViewPlugin } from './editor/viewPlugin';
 import { openOrCreateLiteratureNote } from './notes';
@@ -31,6 +32,7 @@ export default class CitationLinksPlugin extends Plugin {
 			bibliography: this.bibliography,
 			openNote: (citekey: string, linkpath: string, sourcePath: string, paneType: PaneType | boolean) =>
 				openOrCreateLiteratureNote(this.app, citekey, linkpath, sourcePath, paneType),
+			isAutocompleteEnabled: () => this.settings.autocomplete,
 		};
 
 		this.bibliography.onChanged((bibliography) => {
@@ -43,6 +45,10 @@ export default class CitationLinksPlugin extends Plugin {
 		this.registerView(REFERENCE_VIEW_TYPE, (leaf) => new ReferenceListView(leaf, this.context));
 		this.registerEditorSuggest(new CitekeySuggest(this.app, this.context));
 		this.registerHoverLinkSource(HOVER_SOURCE_ID, { display: 'Citation Links', defaultMod: true });
+
+		this.addRibbonIcon('quote', 'Show reference list', () => {
+			void this.activateReferenceList();
+		});
 
 		this.addCommand({
 			id: 'reload-bibliography',
@@ -58,11 +64,18 @@ export default class CitationLinksPlugin extends Plugin {
 				void this.activateReferenceList();
 			},
 		});
+		this.addCommand({
+			id: 'copy-debug-report',
+			name: 'Copy debug report',
+			callback: () => {
+				void this.copyDebugReport();
+			},
+		});
 
 		this.addSettingTab(new CitationLinksSettingTab(this.app, this));
 
 		this.app.workspace.onLayoutReady(() => {
-			void this.applyFolder();
+			void this.start();
 		});
 	}
 
@@ -72,10 +85,26 @@ export default class CitationLinksPlugin extends Plugin {
 		if (typeof this.settings.folder !== 'string') {
 			this.settings.folder = '';
 		}
+		if (typeof this.settings.autocomplete !== 'boolean') {
+			this.settings.autocomplete = DEFAULT_SETTINGS.autocomplete;
+		}
+		if (typeof this.settings.referenceListShown !== 'boolean') {
+			this.settings.referenceListShown = DEFAULT_SETTINGS.referenceListShown;
+		}
 	}
 
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+	}
+
+	/** Load the bibliography once the workspace exists and open the reference list on the first run. */
+	private async start(): Promise<void> {
+		await this.applyFolder();
+		if (!this.settings.referenceListShown) {
+			this.settings.referenceListShown = true;
+			await this.saveSettings();
+			await this.activateReferenceList();
+		}
 	}
 
 	/** (Re)load the bibliography from the configured folder and start watching it. */
@@ -94,6 +123,16 @@ export default class CitationLinksPlugin extends Plugin {
 			return;
 		}
 		new Notice(`Citation Links: ${summary.items} items from ${summary.files} file(s)`);
+	}
+
+	async copyDebugReport(): Promise<void> {
+		const report = buildDebugReport(this.app, this.bibliography, resolveFolder(this.settings.folder), this.manifest.version);
+		try {
+			await navigator.clipboard.writeText(report);
+		} catch (error) {
+			console.warn('[citation-links] Could not copy the debug report', error);
+		}
+		new Notice(report, 15000);
 	}
 
 	/** Repaint every open editor, reading view and reference list after a bibliography reload. */

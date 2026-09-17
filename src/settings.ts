@@ -7,10 +7,16 @@ import type CitationLinksPlugin from './main';
 export interface CitationLinksSettings {
 	/** Folder with the CSL JSON files written by Better BibTeX, as typed by the user (may start with `~`). */
 	folder: string;
+	/** Whether typing `@` suggests citekeys from the bibliography. */
+	autocomplete: boolean;
+	/** Internal: the reference list has been opened once automatically after installation. */
+	referenceListShown: boolean;
 }
 
 export const DEFAULT_SETTINGS: CitationLinksSettings = {
 	folder: '',
+	autocomplete: true,
+	referenceListShown: false,
 };
 
 /** Expand a leading `~` to the home directory and trim whitespace. */
@@ -40,7 +46,7 @@ export function validateFolder(folder: string): string | undefined {
 	return undefined;
 }
 
-/** The plugin has exactly one setting: the folder with the CSL JSON exports. */
+/** Settings tab: the CSL JSON folder and the autocompletion toggle. */
 export class CitationLinksSettingTab extends PluginSettingTab {
 	constructor(
 		app: App,
@@ -63,19 +69,41 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 					validate: (value: string) => validateFolder(value),
 				},
 			},
+			{
+				name: 'Citekey autocompletion',
+				desc: 'Suggest citekeys from the bibliography while typing "@" and insert a complete citation link on selection.',
+				control: {
+					type: 'toggle',
+					key: 'autocomplete',
+				},
+			},
 		];
 	}
 
 	getControlValue(key: string): unknown {
-		return key === 'folder' ? this.citationLinks.settings.folder : undefined;
+		switch (key) {
+			case 'folder':
+				return this.citationLinks.settings.folder;
+			case 'autocomplete':
+				return this.citationLinks.settings.autocomplete;
+			default:
+				return undefined;
+		}
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
-		if (key !== 'folder') {
-			return;
+		switch (key) {
+			case 'folder':
+				this.citationLinks.settings.folder = typeof value === 'string' ? value.trim() : '';
+				await this.citationLinks.saveSettings();
+				await this.citationLinks.applyFolder();
+				return;
+			case 'autocomplete':
+				this.citationLinks.settings.autocomplete = value === true;
+				await this.citationLinks.saveSettings();
+				return;
+			default:
+				return;
 		}
-		this.citationLinks.settings.folder = typeof value === 'string' ? value.trim() : '';
-		await this.citationLinks.saveSettings();
-		await this.citationLinks.applyFolder();
 	}
 }

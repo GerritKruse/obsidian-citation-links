@@ -1,28 +1,97 @@
 /* Citation Links */
 
+/*
+ * Citations intentionally do not look like ordinary wikilinks: the eye should
+ * read them as citations, not as an invitation to click an internal link,
+ * even though the link is still there underneath. Colour, font and the hover
+ * hint are all custom properties so a CSS snippet can restyle citations
+ * without touching the plugin – see the README's "Appearance" section.
+ */
+body {
+	--citation-links-color: var(--text-normal);
+	--citation-links-font-family: inherit;
+	--citation-links-font-size: inherit;
+	--citation-links-font-variant: normal;
+	--citation-links-hover-decoration: underline dotted;
+}
+
 /* Inline citations (Live Preview widget and Reading Mode anchors) */
+.citation-links-cite {
+	color: var(--citation-links-color);
+	font-family: var(--citation-links-font-family);
+	font-size: var(--citation-links-font-size);
+	font-variant: var(--citation-links-font-variant);
+}
+
 .citation-links-part {
 	cursor: var(--cursor-link);
 }
 
-/* Obsidian marks links without a target note as unresolved; a known citekey is not an error. */
-.markdown-rendered a.citation-links-part.is-unresolved:not(.citation-links-unknown),
-.markdown-source-view .citation-links-part.is-unresolved:not(.citation-links-unknown) {
-	color: var(--link-color);
+/*
+ * Obsidian styles internal links with its own colour and underline. Live
+ * Preview keys that off `.cm-hmd-internal-link` and `.cm-underline`
+ * (`.cm-s-obsidian span.cm-hmd-internal-link`, specificity 0-1-1, colour
+ * `var(--link-color)`; `.markdown-source-view.mod-cm6 .cm-underline`,
+ * specificity 0-2-0, `text-decoration-line: var(--link-decoration)`), which
+ * the widget no longer adds to its parts, so nothing there needs beating in
+ * practice – the rule below is kept as an explicit, self-documenting default
+ * and a safeguard against future Obsidian changes. Reading Mode reuses
+ * Obsidian's own `<a class="internal-link">`, whose colour and underline
+ * (`.markdown-rendered .internal-link`, specificity 0-2-0) are genuinely
+ * still in play and are overridden here with higher specificity (0-4-1),
+ * which wins regardless of stylesheet order.
+ */
+.markdown-source-view.mod-cm6 .citation-links-cite .citation-links-part,
+.markdown-rendered .citation-links-cite a.internal-link.citation-links-part {
+	color: var(--citation-links-color);
+	text-decoration: none;
+}
+
+/*
+ * Obsidian's hover rules (`.markdown-rendered .internal-link:hover`,
+ * specificity 0-3-0, colour `var(--link-color-hover)`, underline
+ * `var(--link-decoration-hover)`) are outweighed the same way (0-5-1); ours
+ * keeps the citation colour and only adds a subtle underline, so the part
+ * still reads as clickable without looking like a link at rest.
+ */
+@media (hover: hover) {
+	.markdown-source-view.mod-cm6 .citation-links-cite .citation-links-part:hover,
+	.markdown-rendered .citation-links-cite a.internal-link.citation-links-part:hover {
+		color: var(--citation-links-color);
+		text-decoration: var(--citation-links-hover-decoration);
+	}
+}
+
+/*
+ * Obsidian marks links without a target note as unresolved
+ * (`.markdown-rendered .internal-link.is-unresolved`, specificity 0-3-0:
+ * dimmed colour, opacity and filter). A known citekey without a note yet is
+ * not an error, so full opacity is restored here (0-6-1, colour already
+ * follows from the rule above); the unknown-citekey styling below still
+ * wins over this because it is more specific still.
+ */
+.markdown-rendered .citation-links-cite a.internal-link.citation-links-part.is-unresolved:not(.citation-links-unknown) {
 	opacity: 1;
 	filter: none;
-	text-decoration-color: var(--link-decoration-color);
-	text-decoration-style: var(--link-decoration);
 }
 
 /* Citekeys that are not in the bibliography */
 .citation-links-unknown,
-.markdown-rendered a.citation-links-unknown,
-.markdown-source-view .citation-links-unknown {
+.markdown-source-view.mod-cm6 .citation-links-cite .citation-links-part.citation-links-unknown,
+.markdown-rendered .citation-links-cite a.internal-link.citation-links-part.citation-links-unknown {
 	color: var(--text-error);
 	text-decoration: underline dotted;
 	text-decoration-color: var(--text-error);
 	text-underline-offset: 2px;
+}
+
+@media (hover: hover) {
+	.markdown-source-view.mod-cm6 .citation-links-cite .citation-links-part.citation-links-unknown:hover,
+	.markdown-rendered .citation-links-cite a.internal-link.citation-links-part.citation-links-unknown:hover {
+		color: var(--text-error);
+		text-decoration: underline dotted;
+		text-decoration-color: var(--text-error);
+	}
 }
 
 /* Reference list view */

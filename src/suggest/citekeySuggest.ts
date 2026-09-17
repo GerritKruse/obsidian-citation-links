@@ -32,7 +32,7 @@ export class CitekeySuggest extends EditorSuggest<CslItem> {
 	}
 
 	onTrigger(cursor: EditorPosition, editor: Editor, _file: TFile | null): EditorSuggestTriggerInfo | null {
-		if (!this.deps.bibliography.ready) {
+		if (!this.deps.isAutocompleteEnabled() || !this.deps.bibliography.ready) {
 			return null;
 		}
 		const before = editor.getLine(cursor.line).slice(0, cursor.ch);

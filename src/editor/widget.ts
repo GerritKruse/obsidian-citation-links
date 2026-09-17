@@ -39,7 +39,7 @@ export class CitationWidget extends WidgetType {
 			}
 			const link = this.links[index];
 			const el = root.createSpan({
-				cls: 'citation-links-part cm-hmd-internal-link cm-underline',
+				cls: 'citation-links-part',
 				text: part.text,
 			});
 			if (link !== undefined) {

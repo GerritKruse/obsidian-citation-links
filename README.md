@@ -37,6 +37,8 @@ In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the a
 
 Use the "Reload bibliography" command to force an immediate reload, for example right after changing the setting.
 
+If citations do not render as expected, run the "Copy debug report" command: it copies a short plain-text report (bibliography state, active note, editor state) to the clipboard and shows it as a notice.
+
 ### 3. Optional: enable the Zotero button offline and for group libraries
 
 The reference list's "Zotero" button normally needs Zotero running with Better BibTeX to resolve the exact item. To make it work offline, and for items in group libraries, add this postscript in Zotero under Settings → Better BibTeX → Export → Postscript:
@@ -90,17 +92,68 @@ A citation link stays a normal Obsidian link to a note named `@<Citekey>.md`. Cl
 
 ## Reference list
 
-The "Show reference list" command opens a "References" view in the right sidebar. It lists every work cited in the active note as an APA 7 bibliography, sorted alphabetically, and updates as you switch notes or edit citations. Each entry has a "Zotero" button and an "Open note" (or "Create note") button; there are no PDF links and no copy button.
+The "References" view in the right sidebar opens automatically the first time the plugin runs; afterwards use the quote icon in the left ribbon or the "Show reference list" command. It lists every work cited in the active note as an APA 7 bibliography, sorted alphabetically, and updates as you switch notes or edit citations. Each entry has a "Zotero" button and an "Open note" (or "Create note") button; there are no PDF links and no copy button.
 
 ## Autocomplete
 
-Typing `@` – optionally right after `[[` – suggests citekeys from the bibliography, matching by citekey prefix first and then by citekey, author, or title substring. Selecting a suggestion inserts a complete `[[@Citekey]]` link. If Obsidian's own file suggester pops up instead of the citekey list, type `@` without brackets.
+Typing `@` – optionally right after `[[` – suggests citekeys from the bibliography, matching by citekey prefix first and then by citekey, author, or title substring. Selecting a suggestion inserts a complete `[[@Citekey]]` link. If Obsidian's own file suggester pops up instead of the citekey list, type `@` without brackets. The suggestions can be switched off with the "Citekey autocompletion" toggle in the plugin settings.
 
 ## How it works and privacy
 
 Citation Links parses CSL JSON files from the folder you configure and formats them with citeproc-js and a bundled APA 7 CSL style, entirely in memory – nothing is written back to that folder, and the parsed bibliography is never persisted anywhere else. The only network access the plugin makes is to `http://127.0.0.1:23119/better-bibtex/json-rpc`, Better BibTeX's local JSON-RPC endpoint, and only when you click a "Zotero" button: it calls `user.groups` and `item.export` to resolve the exact `zotero://select/...` link for that item, with a 2-second timeout. If Better BibTeX is not reachable, the plugin falls back to a citekey-based `zotero://select/...` link, which Better BibTeX can only resolve inside your default library, and shows a notice. This request never leaves your machine, and the plugin sends no telemetry.
 
 Because the configured CSL JSON folder is typically outside your vault, Citation Links reads files outside the vault – this is required for it to work and is disclosed here per Obsidian's developer policy.
+
+## Appearance
+
+Citations intentionally do not look like ordinary wikilinks: no link colour and no underline, so the eye reads them as citations rather than as an invitation to click – even though the link is still there underneath and still works exactly as before. On hover, a part gains a subtle dotted underline so it stays discoverable as a link.
+
+The look is controlled by CSS custom properties, set on `body` in `styles.css`:
+
+```css
+body {
+	--citation-links-color: var(--text-normal);
+	--citation-links-font-family: inherit;
+	--citation-links-font-size: inherit;
+	--citation-links-font-variant: normal;
+	--citation-links-hover-decoration: underline dotted;
+}
+```
+
+To restyle citations without touching the plugin, add a CSS snippet (Settings → Appearance → CSS snippets → open snippets folder, then enable it) that overrides one or more of these variables. A few ready-to-paste options:
+
+Muted, slightly dimmer than the surrounding text:
+
+```css
+body {
+	--citation-links-color: var(--text-muted);
+}
+```
+
+Small caps, to set citations apart typographically:
+
+```css
+body {
+	--citation-links-font-variant: small-caps;
+}
+```
+
+Monospace, for a reference-like look:
+
+```css
+body {
+	--citation-links-font-family: var(--font-monospace);
+	--citation-links-font-size: 0.9em;
+}
+```
+
+The dotted underline on hover can be switched off entirely with:
+
+```css
+body {
+	--citation-links-hover-decoration: none;
+}
+```
 
 ## Limitations
 
