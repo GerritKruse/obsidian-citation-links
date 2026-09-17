@@ -1,3 +1,4 @@
+import { Prec } from '@codemirror/state';
 import type { EditorView, ViewPlugin } from '@codemirror/view';
 import { MarkdownView, Notice, Plugin, type PaneType } from 'obsidian';
 import { DEFAULT_LANG, LOCALES, STYLE_XML } from './assets';
@@ -42,7 +43,10 @@ export default class CitationLinksPlugin extends Plugin {
 		});
 
 		this.viewPlugin = createCitationViewPlugin(this.context);
-		this.registerEditorExtension([bibliographyVersionField, this.viewPlugin]);
+		// Highest precedence so the citation replace decoration is ordered before Obsidian's own
+		// formatting-hiding replace decorations that start at the same "[[" position; otherwise
+		// CodeMirror's tile renderer draws Obsidian's empty widget over the whole citation range.
+		this.registerEditorExtension([bibliographyVersionField, Prec.highest(this.viewPlugin)]);
 		this.registerMarkdownPostProcessor(createPostProcessor(this.context));
 		this.registerView(REFERENCE_VIEW_TYPE, (leaf) => new ReferenceListView(leaf, this.context));
 		this.registerEditorSuggest(new CitekeySuggest(this.app, this.context));
