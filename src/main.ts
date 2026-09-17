@@ -14,6 +14,11 @@ import { CitationLinksSettingTab, DEFAULT_SETTINGS, resolveFolder, type Citation
 import { CitekeySuggest } from './suggest/citekeySuggest';
 import { REFERENCE_VIEW_TYPE, ReferenceListView } from './view/referenceList';
 
+/** Shown at start-up and on a manual reload while no CSL JSON folder is configured. */
+const MISSING_FOLDER_NOTICE =
+	'Citation Links: no CSL JSON folder set. Open the plugin settings and enter the folder that holds your Better BibTeX exports – nothing is rendered until then.';
+const MISSING_FOLDER_NOTICE_MS = 12000;
+
 export default class CitationLinksPlugin extends Plugin {
 	settings!: CitationLinksSettings;
 	formatter!: Formatter;
@@ -107,6 +112,9 @@ export default class CitationLinksPlugin extends Plugin {
 
 	/** Once the workspace exists, make sure the reference list is present if wanted. */
 	private async start(): Promise<void> {
+		if (resolveFolder(this.settings.folder) === '') {
+			new Notice(MISSING_FOLDER_NOTICE, MISSING_FOLDER_NOTICE_MS);
+		}
 		if (!this.settings.showReferenceList) {
 			return;
 		}
@@ -125,7 +133,7 @@ export default class CitationLinksPlugin extends Plugin {
 
 	async reloadBibliography(): Promise<void> {
 		if (resolveFolder(this.settings.folder) === '') {
-			new Notice('Citation Links: no CSL JSON folder configured');
+			new Notice(MISSING_FOLDER_NOTICE, MISSING_FOLDER_NOTICE_MS);
 			return;
 		}
 		const summary = await this.bibliography.reload();

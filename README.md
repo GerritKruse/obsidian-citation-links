@@ -16,6 +16,8 @@ Citation Links is desktop-only and reads its bibliography from CSL JSON files th
 
 ## Installation
 
+> **Required:** Citation Links renders nothing until steps 2 and 3 below are done – it has to know where your Better BibTeX CSL JSON exports are. Until the folder is set, a notice at start-up and the References view both point this out.
+
 ### Requirements
 
 - Obsidian 1.13.0 or later, desktop only (the plugin is not available on mobile).
@@ -23,10 +25,7 @@ Citation Links is desktop-only and reads its bibliography from CSL JSON files th
 
 ### 1. Install the plugin
 
-Citation Links is not yet in Obsidian's community plugin directory. Install it one of two ways:
-
-- **From a GitHub release**: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/GerritKruse/obsidian-citation-links/releases) into a new folder `<vault>/.obsidian/plugins/citation-links/`, then enable "Citation Links" under Settings → Community plugins.
-- **With [BRAT](https://github.com/TfTHacker/obsidian42-brat)**: add the repository `https://github.com/GerritKruse/obsidian-citation-links` as a beta plugin.
+In Obsidian, go to Settings → Community plugins → Browse, search for "Citation Links", select it, click Install, then Enable.
 
 ### 2. Auto-export your bibliography from Zotero
 
@@ -40,9 +39,9 @@ Repeat this for every library you cite from – your personal library and each g
 
 If you export more than one library, open Zotero Settings → Better BibTeX → Citation Keys and set the key uniqueness to "across all libraries", so the same citekey is never reused between them.
 
-### 3. Point the plugin at the folder
+### 3. Point the plugin at the folder (required)
 
-In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the path of that folder (`~` is expanded to your home directory). Every `.json` file in the folder is merged into one in-memory bibliography, the folder is watched for changes, and the "Reload bibliography" command forces an immediate reload – its notice reports how many items were loaded from how many files, which is a good first check if something looks off.
+This setting is mandatory: without it, nothing renders, an inline hint appears under the empty field in the settings tab, and a notice shows at start-up. In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the path of that folder (`~` is expanded to your home directory). Every `.json` file in the folder is merged into one in-memory bibliography, the folder is watched for changes, and the "Reload bibliography" command forces an immediate reload – its notice reports how many items were loaded from how many files, which is a good first check if something looks off.
 
 ### Other settings
 
@@ -214,6 +213,8 @@ The only network access the plugin makes is to `http://127.0.0.1:23119/better-bi
 - APA 7th edition only, English (US) locale only.
 
 ## Troubleshooting
+
+If citations stay ordinary wikilinks instead of rendering, the CSL JSON folder is almost always not set or wrong – check Settings → Citation Links, then use the "Reload bibliography" command.
 
 Run the "Copy debug report" command to copy a short plain-text report (bibliography state, active note, editor state) to the clipboard; it also shows as a notice. It has no default hotkey, so assign one yourself, or enable the "Command palette" core plugin to run it by name.
 

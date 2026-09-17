@@ -33,7 +33,7 @@ export function resolveFolder(folder: string): string {
 export function validateFolder(folder: string): string | undefined {
 	const resolved = resolveFolder(folder);
 	if (resolved === '') {
-		return undefined;
+		return 'Required: enter the folder that holds your Better BibTeX CSL JSON exports.';
 	}
 	if (!fs.existsSync(resolved)) {
 		return 'Folder not found';
@@ -58,8 +58,9 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 			{
 				name: 'CSL JSON folder',
 				desc:
-					'Absolute path of the folder that holds the CSL JSON files written by Better BibTeX ("Keep updated" auto-export). ' +
-					'Every .json file in the folder is merged into one bibliography. Leave empty to disable rendering.',
+					'Required – nothing is rendered until this points at a folder. Absolute path of the folder that holds the CSL JSON files ' +
+					'written by Better BibTeX ("Keep updated" auto-export), for example ~/Zotero/csl-json. ' +
+					'Every .json file in the folder is merged into one bibliography.',
 				control: {
 					type: 'text',
 					key: 'folder',
