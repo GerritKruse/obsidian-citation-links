@@ -1,5 +1,4 @@
-import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
+import { fs, path } from '../platform/node';
 import type { CslItem } from '../types';
 
 /** UTF-8 byte order mark, in case an export tool prepends one. */
@@ -31,7 +30,7 @@ export interface LoadResult {
  * expected to handle that.
  */
 export async function loadFolder(dir: string): Promise<LoadResult> {
-	const entries = await fs.readdir(dir, { withFileTypes: true });
+	const entries = await fs.promises.readdir(dir, { withFileTypes: true });
 	const fileNames = entries
 		.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'))
 		.map((entry) => entry.name)
@@ -49,7 +48,7 @@ export async function loadFolder(dir: string): Promise<LoadResult> {
 
 		let raw: string;
 		try {
-			raw = await fs.readFile(filePath, 'utf8');
+			raw = await fs.promises.readFile(filePath, 'utf8');
 		} catch (error) {
 			skippedFiles.push(fileName);
 			console.warn(`[citation-links] could not read bibliography file "${fileName}":`, error);

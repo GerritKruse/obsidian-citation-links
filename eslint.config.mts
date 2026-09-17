@@ -43,4 +43,28 @@ export default defineConfig(
 			],
 		},
 	},
+	{
+		files: ['src/**/*.ts'],
+		ignores: ['src/platform/**', 'src/**/*.test.ts'],
+		rules: {
+			'no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							regex: '^node:',
+							message: 'Import Node APIs through src/platform/* so the plugin type-checks without Node declarations.',
+						},
+					],
+				},
+			],
+			'no-restricted-globals': [
+				'error',
+				{
+					name: 'Buffer',
+					message: 'Use Uint8Array, TextEncoder and TextDecoder instead of the Node Buffer global.',
+				},
+			],
+		},
+	},
 );

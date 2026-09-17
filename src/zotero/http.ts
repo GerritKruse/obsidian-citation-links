@@ -17,24 +17,51 @@
  * workaround.
  */
 
-import { request } from 'node:http';
-import { URL } from 'node:url';
 import type { RequestUrlParam, RequestUrlResponse } from 'obsidian';
+import { httpRequest } from '../platform/http';
 
 /** Node's `http` module has no request timeout by default; give it one. */
 const SOCKET_TIMEOUT_MS = 10000;
+
+/**
+ * `ignoreBOM: true` keeps a leading byte order mark in the decoded text, as
+ * Node's `Buffer.toString('utf-8')` did in earlier versions of this module;
+ * the default would silently strip it.
+ */
+const UTF8 = new TextDecoder('utf-8', { ignoreBOM: true });
 
 /** Node may report a response header as a single string or as string[]. */
 function flattenHeaderValue(value: string | string[] | undefined): string {
 	return Array.isArray(value) ? value.join(', ') : (value ?? '');
 }
 
-/** Turns a `RequestUrlParam` body into a `Buffer`, or undefined for no body. */
-function toBodyBuffer(body: string | ArrayBuffer | undefined): Buffer | undefined {
+/** Turns a `RequestUrlParam` body into bytes, or undefined for no body. */
+function toBodyBytes(body: string | ArrayBuffer | undefined): Uint8Array | undefined {
 	if (body === undefined) {
 		return undefined;
 	}
-	return typeof body === 'string' ? Buffer.from(body, 'utf-8') : Buffer.from(body);
+	return typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(body);
+}
+
+/**
+ * Joins the received response chunks into one contiguous `ArrayBuffer`.
+ * Allocating the `ArrayBuffer` explicitly (rather than reading `.buffer` off
+ * a `Uint8Array`) keeps the type `ArrayBuffer` instead of `ArrayBufferLike`,
+ * which is what `RequestUrlResponse.arrayBuffer` requires.
+ */
+function concatChunks(chunks: Uint8Array[]): ArrayBuffer {
+	let total = 0;
+	for (const chunk of chunks) {
+		total += chunk.byteLength;
+	}
+	const buffer = new ArrayBuffer(total);
+	const merged = new Uint8Array(buffer);
+	let offset = 0;
+	for (const chunk of chunks) {
+		merged.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return buffer;
 }
 
 /**
@@ -44,7 +71,7 @@ function toBodyBuffer(body: string | ArrayBuffer | undefined): Buffer | undefine
 export function nodeHttpRequest(params: RequestUrlParam): Promise<RequestUrlResponse> {
 	return new Promise((resolve, reject) => {
 		const url = new URL(params.url);
-		const body = toBodyBuffer(params.body);
+		const body = toBodyBytes(params.body);
 
 		const headers: Record<string, string> = {
 			Accept: 'application/json',
@@ -59,7 +86,7 @@ export function nodeHttpRequest(params: RequestUrlParam): Promise<RequestUrlResp
 			headers['Content-Length'] = String(body.byteLength);
 		}
 
-		const req = request(
+		const req = httpRequest(
 			url,
 			{
 				method: params.method ?? 'GET',
@@ -67,23 +94,18 @@ export function nodeHttpRequest(params: RequestUrlParam): Promise<RequestUrlResp
 				timeout: SOCKET_TIMEOUT_MS,
 			},
 			(res) => {
-				const chunks: Buffer[] = [];
-				res.on('data', (chunk: Buffer) => chunks.push(chunk));
+				const chunks: Uint8Array[] = [];
+				res.on('data', (chunk) => chunks.push(chunk));
 				res.on('error', (error) => reject(error));
 				res.on('end', () => {
-					const buffer = Buffer.concat(chunks);
+					const arrayBuffer = concatChunks(chunks);
 					const status = res.statusCode ?? 0;
-					const text = buffer.toString('utf-8');
+					const text = UTF8.decode(arrayBuffer);
 
 					const responseHeaders: Record<string, string> = {};
 					for (const [key, value] of Object.entries(res.headers)) {
 						responseHeaders[key] = flattenHeaderValue(value);
 					}
-
-					const arrayBuffer = buffer.buffer.slice(
-						buffer.byteOffset,
-						buffer.byteOffset + buffer.byteLength,
-					);
 
 					const response: RequestUrlResponse = {
 						status,

@@ -1,6 +1,4 @@
-import { existsSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { fs, os, path } from './platform/node';
 import { PluginSettingTab, type App, type SettingDefinitionItem } from 'obsidian';
 import type CitationLinksPlugin from './main';
 
@@ -23,10 +21,10 @@ export const DEFAULT_SETTINGS: CitationLinksSettings = {
 export function resolveFolder(folder: string): string {
 	const trimmed = folder.trim();
 	if (trimmed === '~') {
-		return homedir();
+		return os.homedir();
 	}
 	if (trimmed.startsWith('~/')) {
-		return join(homedir(), trimmed.slice(2));
+		return path.join(os.homedir(), trimmed.slice(2));
 	}
 	return trimmed;
 }
@@ -37,10 +35,10 @@ export function validateFolder(folder: string): string | undefined {
 	if (resolved === '') {
 		return undefined;
 	}
-	if (!existsSync(resolved)) {
+	if (!fs.existsSync(resolved)) {
 		return 'Folder not found';
 	}
-	if (!statSync(resolved).isDirectory()) {
+	if (!fs.statSync(resolved).isDirectory()) {
 		return 'Not a folder';
 	}
 	return undefined;

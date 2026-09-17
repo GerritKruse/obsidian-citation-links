@@ -1,5 +1,4 @@
-import { watch } from 'node:fs';
-import type { FSWatcher } from 'node:fs';
+import { fs, type FileWatcher } from '../platform/node';
 
 /** Delays, in order, before each attempt to re-create a failed watcher. */
 const RESTART_DELAYS_MS = [5000, 30000];
@@ -32,13 +31,13 @@ export function watchFolder(
 	onError: (error: unknown) => void,
 ): FolderWatcher {
 	let disposed = false;
-	let watcher: FSWatcher | null = null;
+	let watcher: FileWatcher | null = null;
 	let restartTimer: number | null = null;
 	let restartAttempt = 0;
 
-	function create(): FSWatcher | null {
+	function create(): FileWatcher | null {
 		try {
-			const created = watch(dir, { persistent: false }, (_eventType, fileName) => {
+			const created = fs.watch(dir, { persistent: false }, (_eventType, fileName) => {
 				if (disposed) return;
 				onChange(fileName ?? null);
 			});
