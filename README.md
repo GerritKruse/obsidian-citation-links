@@ -1,6 +1,6 @@
 # Citation Links
 
-Citation Links renders Obsidian wikilinks to Better BibTeX citekeys as formatted APA 7 in-text citations, in Live Preview and in Reading mode, while keeping them real vault links: clicking a citation still opens its literature note, and graph view and backlinks still work.
+Citation Links renders Obsidian wikilinks to Better BibTeX citekeys as formatted APA 7 in-text citations, in both Live Preview and Reading mode, while keeping them real vault links: clicking a citation still opens its literature note, and graph view and backlinks still work.
 
 Before:
 
@@ -14,95 +14,128 @@ After (as rendered in the note):
 
 Citation Links is desktop-only and reads its bibliography from CSL JSON files that Zotero and Better BibTeX write to a folder on disk – Zotero does not need to be running for citations to render.
 
-## Requirements
+## Installation
 
-- Obsidian 1.13.0 or later, desktop only (the plugin is not available on mobile)
-- Zotero with the Better BibTeX add-on, to export the bibliography and (optionally) to resolve the "Zotero" button
+### Requirements
 
-## Setup
+- Obsidian 1.13.0 or later, desktop only (the plugin is not available on mobile).
+- Zotero with the Better BibTeX add-on, to export the bibliography and (optionally) to resolve the "Zotero" button.
 
-### 1. Auto-export the bibliography from Zotero
+### 1. Install the plugin
 
-In Zotero, right-click a library or collection and choose "Export Library…" (or "Export Collection…"), then:
+Citation Links is not yet in Obsidian's community plugin directory. Install it one of two ways:
+
+- **From a GitHub release**: download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/GerritKruse/obsidian-citation-links/releases) into a new folder `<vault>/.obsidian/plugins/citation-links/`, then enable "Citation Links" under Settings → Community plugins.
+- **With [BRAT](https://github.com/TfTHacker/obsidian42-brat)**: add the repository `https://github.com/GerritKruse/obsidian-citation-links` as a beta plugin.
+
+### 2. Auto-export your bibliography from Zotero
+
+In Zotero, right-click a library and choose "Export Library…", then:
 
 1. Set the format to "Better CSL JSON".
 2. Check "Keep updated".
-3. Save the export into a folder, for example `~/Zotero/csl-json`.
+3. Save the export into a folder, for example `~/Zotero/csl-json/`.
 
-Repeat this for every library you cite from, including group libraries – Better BibTeX rewrites the file whenever the library changes, so the export stays current without any manual step. If you export more than one library, set Better BibTeX's citation-key uniqueness (Better BibTeX settings → Citation Keys) to "across all libraries" so the same key is never reused between them.
+Repeat this for every library you cite from – your personal library and each group library – saving all of them into that same folder. Better BibTeX rewrites each file whenever the corresponding library changes, so the exports stay current without any manual step.
 
-### 2. Point the plugin at the folder
+If you export more than one library, open Zotero Settings → Better BibTeX → Citation Keys and set the key uniqueness to "across all libraries", so the same citekey is never reused between them.
 
-In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the absolute path of that folder (`~` is expanded to your home directory). Every `.json` file in the folder is merged into one in-memory bibliography; the folder is watched, and changes are picked up automatically after a short debounce. If the same citekey appears in more than one file, Citation Links shows a one-time notice and keeps the entry from whichever file sorts last alphabetically.
+### 3. Point the plugin at the folder
 
-Use the "Reload bibliography" command to force an immediate reload, for example right after changing the setting.
+In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the path of that folder (`~` is expanded to your home directory). Every `.json` file in the folder is merged into one in-memory bibliography, the folder is watched for changes, and the "Reload bibliography" command forces an immediate reload – its notice reports how many items were loaded from how many files, which is a good first check if something looks off.
 
-If citations do not render as expected, run the "Copy debug report" command: it copies a short plain-text report (bibliography state, active note, editor state) to the clipboard and shows it as a notice.
+### Other settings
 
-### 3. Optional: enable the Zotero button offline and for group libraries
+- **Citekey autocompletion** – on by default; see [Autocomplete](#autocomplete).
+- **Reference list** – on by default; keeps the "References" view open in the right sidebar. Turning it off closes the view again; see [Reference list](#reference-list).
 
-The reference list's "Zotero" button normally needs Zotero running with Better BibTeX to resolve the exact item. To make it work offline, and for items in group libraries, add this postscript in Zotero under Settings → Better BibTeX → Export → Postscript:
+## Citation syntax
 
-```js
-if (Translator.BetterCSL) { reference.custom = { uri: item.uri }; }
-```
+A wikilink is a citation when the last `/`-separated segment of its target starts with `@`; everything after the `@` is the Better BibTeX citekey. A folder path before it and a trailing `.md` are both fine and are not part of the citekey.
 
-This embeds the item's URI directly in the CSL JSON export, so the button no longer needs a live connection to Zotero.
+### Recognised
 
-## Syntax
-
-The locale is fixed to English (US) and the style to APA 7th edition. A citation is any wikilink whose target's last path segment starts with `@`:
-
-| Source | Rendered |
+| Wikilink | Recognised as |
 | --- | --- |
-| `[[@GartenbergEtAl2026]]` | (Gartenberg et al., 2026) |
-| `[[@GartenbergEtAl2026\|n]]` | Gartenberg et al. (2026) |
-| `[[@GartenbergEtAl2026\|y]]` | (2026) |
-| `[[@GartenbergEtAl2026\|p. 797]]` | (Gartenberg et al., 2026, p. 797) |
-| `[[@GartenbergEtAl2026\|pp. 797-799]]` | (Gartenberg et al., 2026, pp. 797–799) |
-| `[[@GartenbergEtAl2026\|n p. 797]]` | Gartenberg et al. (2026, p. 797) |
-| `[[@GartenbergEtAl2026\|ch. 3]]` | (Gartenberg et al., 2026, Chapter 3) |
-| `[[@GartenbergEtAl2026\|sec. 2.1]]` | (Gartenberg et al., 2026, Section 2.1) |
-| `[[@GartenbergEtAl2026\|S. 12]]` | (Gartenberg et al., 2026, p. 12) |
-| `[[@GartenbergEtAl2026\|siehe dort]]` | a normal link with the text "siehe dort" |
-| `[[20 - Literature/@GartenbergEtAl2026.md\|p. 796]]` | folder paths and a trailing `.md` are both fine |
-| `[[@GartenbergEtAl2026#Konzepte]]` | an ordinary link (links with a `#` or `^` anchor are never citations) |
+| `[[@GartenbergEtAl2026]]` | citation, citekey `GartenbergEtAl2026` |
+| `[[20 - Literature/@GartenbergEtAl2026]]` | citation; the folder path is ignored |
+| `[[20 - Literature/@GartenbergEtAl2026.md\|p. 796]]` | citation with a locator modifier; folder path and `.md` are both fine |
 
-A page range (`pp. 797-799`) is rendered with an en dash, as APA requires. `S.` is accepted as a German synonym for `p.`. An alias that does not match the modifier grammar (`siehe dort` above) is left alone and the link renders as Obsidian normally renders it.
+### Not recognised (rendered as ordinary links, or left alone)
 
-The full modifier grammar is `[form] [locator]`, where `form` is `n` (narrative) or `y` (year only), and `locator` is one of `p.`, `pp.`, `S.`, `ch.`, `sec.` followed by free text. Citation Links always supplies the parentheses itself – do not type `(` and `)` around a citation link.
+| Wikilink | Why |
+| --- | --- |
+| `[[Notizen zu @Kram]]` | `@` is not at the start of the last segment |
+| `[[AI Text Detection]]` | no `@` in the target at all |
+| `[[@GartenbergEtAl2026#Konzepte]]`, `[[@Key^block]]` | anchored to a heading (`#`) or a block (`^`) – these point inside a note, not at the note itself |
+| `![[@GartenbergEtAl2026]]` | embeds are never treated as citations |
+| `[[@GartenbergEtAl2026\|siehe dort]]` | the alias does not match the modifier grammar below, so it renders as an ordinary link with the text "siehe dort" |
+| a link inside inline code or a fenced code block | code is never scanned |
+| a link inside a frontmatter property | frontmatter is never scanned |
+| `@GartenbergEtAl2026` (no brackets) | plain text, not a link at all |
 
-## Grouping
+### Modifiers
 
-Citation links separated by exactly `; ` on a single line are combined into one parenthetical citation, in the order they were written, with each part still individually clickable:
+The modifier is the text after `|`. It sets the citation's form and, optionally, a locator.
+
+| After `\|` | Renders as |
+| --- | --- |
+| *(none)* | (Gartenberg et al., 2026) |
+| `n` | Gartenberg et al. (2026) |
+| `y` | (2026) |
+| `p. 797` | (Gartenberg et al., 2026, p. 797) |
+| `pp. 797-799` | (Gartenberg et al., 2026, pp. 797–799) |
+| `S. 12` | (Gartenberg et al., 2026, p. 12) |
+| `ch. 3` | (Gartenberg et al., 2026, Chapter 3) |
+| `sec. 2.1` | (Gartenberg et al., 2026, Section 2.1) |
+| `n p. 797` | Gartenberg et al. (2026, p. 797) |
+| `y p. 5` | (2026, p. 5) |
+
+A hyphenated page range (`pp. 797-799`) is rendered with an en dash, as APA style requires. `S.` is accepted as a German synonym for `p.`.
+
+The full grammar is `[n|y] [p.|pp.|S.|ch.|sec. <text>]`: the form and the locator are separated by whitespace, and the locator's label and its text are separated by whitespace in turn – `p.797`, with no space, is not a modifier and falls through to an ordinary alias. An empty alias (`[[@Key|]]`) is equivalent to no alias at all. Citation Links always supplies the parentheses itself – never type `(` and `)` around a citation link.
+
+### Grouping
+
+Citation links separated by exactly `; ` on a single line are combined into one parenthetical citation, in the order they were written:
 
 ```
 [[@MiricEtAl2023]]; [[@GartenbergEtAl2026]]
 ```
 
-renders as (Miric et al., 2023; Gartenberg et al., 2026). A narrative-form citation (`|n`) is never grouped – it always stands on its own, and it breaks a chain of otherwise-adjacent citations.
+renders as (Miric et al., 2023; Gartenberg et al., 2026), with each part still individually clickable. A narrative-form citation (`n`) is never grouped – it always stands on its own and breaks a chain of otherwise-adjacent citations. A plain space instead of `; `, a semicolon with no following space, or any other text between two links keeps them in separate groups; grouping never reaches across lines.
 
-## Unknown citekeys
+### Unknown citekeys
 
-A citekey that is not in the loaded bibliography renders as `(@Citekey)` with a red dotted underline and the tooltip "Not in bibliography".
+A citekey that is not in the loaded bibliography renders as `(@TippFehler2026)` in red with a dotted underline, with the tooltip "Not in bibliography".
 
-## Literature notes
+### Style
 
-A citation link stays a normal Obsidian link to a note named `@<Citekey>.md`. Clicking a citation whose note does not exist yet creates an empty note with that name in the vault root and opens it, so you can start taking notes on the source immediately.
+The citation style is fixed to APA 7th edition with the English (US) locale. Disambiguating year suffixes (2026a, 2026b, …) are computed per note, not vault-wide.
+
+## Working with citations
+
+- Clicking a citation opens its literature note, `@<citekey>.md`.
+- If that note does not exist yet, Citation Links creates an empty one in the vault root and opens it.
+- Hovering a citation shows Obsidian's normal page preview, exactly as for any other link.
+- Citations are ordinary links underneath: graph view and backlinks are unaffected.
+- In Live Preview, placing the cursor inside a citation reveals its raw wikilink text; the formatted citation returns once the cursor moves away.
+- Reading mode renders citations identically to Live Preview.
 
 ## Reference list
 
-The "References" view in the right sidebar is opened automatically while the "Reference list" setting is on (default); turning it off closes the view. The quote icon in the left ribbon and the "Show reference list" command open it on demand. It lists every work cited in the active note as an APA 7 bibliography, sorted alphabetically, and updates as you switch notes or edit citations. Each entry has a "Zotero" button and an "Open note" (or "Create note") button; there are no PDF links and no copy button. The Zotero button selects the exact item in whichever library it lives in (personal or group); it is disabled, with a tooltip, when the citekey is not known to Zotero, and it tells you when Zotero is not running.
+The "References" view in the right sidebar lists every work cited in the active note as an alphabetical APA 7 reference list, and updates as you switch notes or edit citations. Each entry has two buttons:
+
+- **Zotero** – opens the exact item in Zotero, in whichever library it lives in (your personal library or a group library). This needs Zotero running with the Better BibTeX add-on; if it is not reachable, the button shows a notice instead of a link. If the citekey is not known to any Zotero library, the button is disabled, with a tooltip saying so.
+- **Open note** / **Create note** – opens the literature note, creating it first if it does not exist yet.
+
+Open the view with the quote icon in the left ribbon, the "Show reference list" command, or the "Reference list" setting, which keeps it open across restarts (default on).
 
 ## Autocomplete
 
-Typing `@` – optionally right after `[[` – suggests citekeys from the bibliography, matching by citekey prefix first and then by citekey, author, or title substring. Selecting a suggestion inserts a complete `[[@Citekey]]` link. If Obsidian's own file suggester pops up instead of the citekey list, type `@` without brackets. The suggestions can be switched off with the "Citekey autocompletion" toggle in the plugin settings.
+Typing `@` – optionally right after `[[` – suggests citekeys from the bibliography: citekey-prefix matches first, then substring matches against citekey, author, and title. Selecting a suggestion (or pressing Enter) inserts a complete `[[@Citekey]]` link.
 
-## How it works and privacy
-
-Citation Links parses CSL JSON files from the folder you configure and formats them with citeproc-js and a bundled APA 7 CSL style, entirely in memory – nothing is written back to that folder, and the parsed bibliography is never persisted anywhere else. The only network access the plugin makes is to `http://127.0.0.1:23119/better-bibtex/json-rpc`, Better BibTeX's local JSON-RPC endpoint, and only for the "Zotero" buttons of the reference list: it calls `user.groups` and `item.export` to resolve the exact `zotero://select/...` link of each listed item (personal and group libraries alike), with a 5-second timeout. The requests are sent with Node's HTTP client because Zotero's local server ignores browser-style requests that carry an `Origin` header. If Zotero is not running, the button shows a notice instead of guessing a link. This request never leaves your machine, and the plugin sends no telemetry.
-
-Because the configured CSL JSON folder is typically outside your vault, Citation Links reads files outside the vault – this is required for it to work and is disclosed here per Obsidian's developer policy.
+Because `[[` also triggers Obsidian's own file suggester, that one may appear first; if so, keep typing or dismiss it and the citekey suggestions take over. The suggestions can be switched off with the "Citekey autocompletion" toggle in the plugin settings.
 
 ## Appearance
 
@@ -155,14 +188,25 @@ body {
 }
 ```
 
+## How it works and privacy
+
+Citation Links parses CSL JSON files from the folder you configure and formats them with citeproc-js and a bundled APA 7 CSL style, entirely in memory – nothing is written back to that folder, and the parsed bibliography is never persisted anywhere else. Because that folder is typically outside your vault, Citation Links reads files outside the vault; this is required for it to work and is disclosed here per Obsidian's developer policy.
+
+The only network access the plugin makes is to `http://127.0.0.1:23119/better-bibtex/json-rpc`, Better BibTeX's local JSON-RPC endpoint, and only for the "Zotero" buttons of the reference list: it calls `user.groups` and `item.export` to resolve the exact `zotero://select/...` link of each listed item (personal and group libraries alike), with a 5-second timeout. The requests are sent with Node's HTTP client because Zotero's local server ignores browser-style requests that carry an `Origin` header. If Zotero is not running, the button shows a notice instead of guessing a link. This request never leaves your machine, and the plugin sends no telemetry.
+
 ## Limitations
 
-- In Live Preview, Obsidian renders tables as a separate widget, so citations inside table cells show the raw link there (Reading mode renders them correctly).
+- In Live Preview, Obsidian renders tables and callouts as separate widgets, so citations inside a table cell or a callout show the raw link there instead of the formatted citation (Reading mode renders them correctly).
 - Citations are not rendered inside frontmatter properties.
 - No Pandoc `[@key]` syntax – only wikilinks.
 - No export of citations or bibliographies.
-- APA 7th edition only, en-US locale only.
-- Disambiguation (2026a, 2026b, …) is computed per note, not vault-wide.
+- APA 7th edition only, English (US) locale only.
+
+## Troubleshooting
+
+Run the "Copy debug report" command to copy a short plain-text report (bibliography state, active note, editor state) to the clipboard; it also shows as a notice. It has no default hotkey, so assign one yourself, or enable the "Command palette" core plugin to run it by name.
+
+If the bibliography itself looks wrong, use the "Reload bibliography" command and check its notice: it reports how many items were loaded from how many files, which usually shows right away whether the configured folder or the Zotero exports are the problem.
 
 ## Development
 

@@ -42,6 +42,11 @@ export default class CitationLinksPlugin extends Plugin {
 			this.refreshViews();
 		});
 
+		// Load the bibliography before any editor or reading view is rendered. Embedded Live Preview
+		// blocks (callouts, tables) are rendered once by Obsidian and not repainted on a later
+		// bibliography reload, so citations inside them would otherwise stay raw after start-up.
+		await this.applyFolder();
+
 		this.viewPlugin = createCitationViewPlugin(this.context);
 		// Highest precedence so the citation replace decoration is ordered before Obsidian's own
 		// formatting-hiding replace decorations that start at the same "[[" position; otherwise
@@ -100,12 +105,17 @@ export default class CitationLinksPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
-	/** Load the bibliography once the workspace exists and make sure the reference list is present if wanted. */
+	/** Once the workspace exists, make sure the reference list is present if wanted. */
 	private async start(): Promise<void> {
-		await this.applyFolder();
-		if (this.settings.showReferenceList) {
-			await this.ensureReferenceList();
+		if (!this.settings.showReferenceList) {
+			return;
 		}
+		await this.ensureReferenceList();
+		// Sidebar tabs restored as deferred views can appear slightly after layout-ready; run once more.
+		const timer = window.setTimeout(() => {
+			void this.ensureReferenceList();
+		}, 2000);
+		this.register(() => window.clearTimeout(timer));
 	}
 
 	/** (Re)load the bibliography from the configured folder and start watching it. */
@@ -164,9 +174,13 @@ export default class CitationLinksPlugin extends Plugin {
 		}
 	}
 
-	/** Open the reference list in the right sidebar without stealing focus; no-op when it already exists. */
+	/** Open the reference list in the right sidebar without stealing focus; keeps exactly one instance. */
 	private async ensureReferenceList(): Promise<void> {
-		if (this.app.workspace.getLeavesOfType(REFERENCE_VIEW_TYPE).length > 0) {
+		const leaves = this.app.workspace.getLeavesOfType(REFERENCE_VIEW_TYPE);
+		for (const duplicate of leaves.slice(1)) {
+			duplicate.detach();
+		}
+		if (leaves.length > 0) {
 			return;
 		}
 		const leaf = this.app.workspace.getRightLeaf(false);
