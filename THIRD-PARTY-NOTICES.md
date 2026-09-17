@@ -1,6 +1,6 @@
 # Third-party notices
 
-Citation Links is released under the MIT license (see [LICENSE](LICENSE)). Its build output (`main.js`) also bundles the third-party components listed below, unmodified, under their own licenses.
+Citation Links is released under the MIT license (see [LICENSE](LICENSE)). Its build output (`main.js`) also bundles the third-party components listed below under their own licenses. citeproc-js and the locale are bundled unmodified; the APA style carries one documented local change, described in its section.
 
 ## citeproc-js
 
@@ -24,6 +24,7 @@ citeproc-js is the citation and bibliography formatting engine that turns the CS
 - Authors: Brenton M. Wiernik, Andrew Dunning
 - License: Creative Commons Attribution-ShareAlike 3.0 (CC BY-SA 3.0), http://creativecommons.org/licenses/by-sa/3.0/
 - Source: https://github.com/citation-style-language/styles
+- Modification: in the `bibliography` macro, the author and date of a reference entry are wrapped in an additional `<group delimiter=". " font-weight="bold">` so that the plugin's reference list can set them in bold. The change is marked with a `Citation Links:` XML comment in the file; everything else, including the `<info>` metadata, is unchanged from the upstream file. In-text citations are not affected.
 
 ## CSL locale: en-US
 

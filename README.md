@@ -111,7 +111,7 @@ A citekey that is not in the loaded bibliography renders as `(@TippFehler2026)` 
 
 ### Style
 
-The citation style is fixed to APA 7th edition with the English (US) locale. Disambiguating year suffixes (2026a, 2026b, …) are computed per note, not vault-wide.
+The citation style is fixed to APA 7th edition with the English (US) locale. Disambiguating year suffixes (2026a, 2026b, …) are computed per note, not vault-wide. The bundled style is the official APA CSL with one local change: reference list entries mark the author and date as bold (see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)); in-text citations are unaffected.
 
 ## Working with citations
 
@@ -129,7 +129,7 @@ The "References" view in the right sidebar lists every work cited in the active 
 - **Zotero** – opens the exact item in Zotero, in whichever library it lives in (your personal library or a group library). This needs Zotero running with the Better BibTeX add-on; if it is not reachable, the button shows a notice instead of a link. If the citekey is not known to any Zotero library, the button is disabled, with a tooltip saying so.
 - **Open note** / **Create note** – opens the literature note, creating it first if it does not exist yet.
 
-DOIs (shown as https://doi.org/… links) and URLs, when present, are clickable and open in your default browser.
+In every entry the author and date, the part that corresponds to the in-text citation, are set in bold so an entry can be matched to a citation at a glance. DOIs (shown as https://doi.org/… links) and URLs, when present, are clickable and open in your default browser.
 
 Open the view with the quote icon in the left ribbon, the "Show reference list" command, or the "Reference list" setting, which keeps it open across restarts (default on).
 
@@ -152,6 +152,7 @@ body {
 	--citation-links-font-size: inherit;
 	--citation-links-font-variant: normal;
 	--citation-links-hover-decoration: underline dotted;
+	--citation-links-reference-key-weight: var(--bold-weight, 600);
 }
 ```
 
@@ -187,6 +188,14 @@ The dotted underline on hover can be switched off entirely with:
 ```css
 body {
 	--citation-links-hover-decoration: none;
+}
+```
+
+The bold author and date in the reference list can be set back to normal weight with:
+
+```css
+body {
+	--citation-links-reference-key-weight: normal;
 }
 ```
 

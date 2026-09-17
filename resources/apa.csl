@@ -2233,8 +2233,11 @@
         </if>
         <else>
           <group delimiter=". " suffix=".">
-            <text macro="author-and-contributors"/>
-            <text macro="date"/>
+            <!-- Citation Links: author and date in bold so an entry can be matched to its in-text citation at a glance. -->
+            <group delimiter=". " font-weight="bold">
+              <text macro="author-and-contributors"/>
+              <text macro="date"/>
+            </group>
             <text macro="title-and-descriptions"/>
             <text macro="source"/>
           </group>

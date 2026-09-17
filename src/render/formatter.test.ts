@@ -170,8 +170,21 @@ describe('Formatter', () => {
 			}
 			const gartenberg = entries.find((e) => e.citekey === 'GartenbergEtAl2026');
 			expect(gartenberg?.html).toContain(
-				'Gartenberg, C., Hasan, S., Murray, A., &#38; Pierce, L. (2026). More Versus Better: Artificial Intelligence, Incentives, and the Emerging Crisis in Peer Review. <i>Organization Science</i>, <i>37</i>(3), 795–812. <a href="https://doi.org/10.1287/orsc.2026.ed.v37.n3">https://doi.org/10.1287/orsc.2026.ed.v37.n3</a>',
+				'<b>Gartenberg, C., Hasan, S., Murray, A., &#38; Pierce, L. (2026)</b>. More Versus Better: Artificial Intelligence, Incentives, and the Emerging Crisis in Peer Review. <i>Organization Science</i>, <i>37</i>(3), 795–812. <a href="https://doi.org/10.1287/orsc.2026.ed.v37.n3">https://doi.org/10.1287/orsc.2026.ed.v37.n3</a>',
 			);
+		});
+
+		it('sets author and date in bold, including a title standing in for a missing author', () => {
+			const entries = formatter.bibliography(['GartenbergEtAl2026', 'NoAuthor2025', 'SmithA2020', 'SmithB2020']);
+			const html = (citekey: string): string => entries.find((e) => e.citekey === citekey)?.html ?? '';
+			expect(html('GartenbergEtAl2026')).toContain(
+				'<b>Gartenberg, C., Hasan, S., Murray, A., &#38; Pierce, L. (2026)</b>. More Versus Better',
+			);
+			expect(html('NoAuthor2025')).toContain('<b>8 digital trends in healthcare in 2025. (2025, January 15)</b>. <i>Some Blog</i>.');
+			expect(html('SmithA2020')).toContain('<b>Smith, J., Doe, A., &#38; Roe, B. (2020a)</b>. Alpha paper.');
+			for (const entry of entries) {
+				expect(entry.html.match(/<b>/g)).toHaveLength(1);
+			}
 		});
 
 		it('returns an empty array when no keys are known', () => {

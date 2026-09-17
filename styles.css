@@ -13,6 +13,8 @@ body {
 	--citation-links-font-size: inherit;
 	--citation-links-font-variant: normal;
 	--citation-links-hover-decoration: underline dotted;
+	/* Weight of the author and date in reference list entries; "normal" switches the emphasis off. */
+	--citation-links-reference-key-weight: var(--bold-weight, 600);
 }
 
 /* Inline citations (Live Preview widget and Reading Mode anchors) */
@@ -123,6 +125,11 @@ body {
 	padding-left: 1.5em;
 	text-indent: -1.5em;
 	overflow-wrap: anywhere;
+}
+
+/* Author and date, i.e. the part that corresponds to the in-text citation (bold group in resources/apa.csl). */
+.citation-links-entry .csl-entry > b:first-child {
+	font-weight: var(--citation-links-reference-key-weight);
 }
 
 .citation-links-entry-link {
