@@ -5,6 +5,6 @@
 	"minAppVersion": "1.13.0",
 	"description": "Renders wikilinks to Better BibTeX citekeys as APA 7 in-text citations while keeping them clickable vault links.",
 	"author": "Gerrit Kruse",
-	"authorUrl": "https://github.com/GerritKruse/obsidian-citation-links",
+	"authorUrl": "https://github.com/GerritKruse",
 	"isDesktopOnly": true
 }
