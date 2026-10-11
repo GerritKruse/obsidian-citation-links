@@ -3,6 +3,7 @@ import type { EditorView, ViewPlugin } from '@codemirror/view';
 import { MarkdownView, Notice, Plugin, type PaneType } from 'obsidian';
 import { DEFAULT_LANG, LOCALES, STYLE_XML } from './assets';
 import { Bibliography } from './bibliography';
+import { mergeLibraries, parseLibraryPreferences, samePreferences } from './bibliography/libraries';
 import { HOVER_SOURCE_ID, type CitationLinksContext } from './context';
 import { buildDebugReport } from './debug';
 import { bibliographyChanged, bibliographyVersionField } from './editor/state';
@@ -13,6 +14,7 @@ import { Formatter } from './render/formatter';
 import { CitationLinksSettingTab, DEFAULT_SETTINGS, resolveFolder, type CitationLinksSettings } from './settings';
 import { CitekeySuggest } from './suggest/citekeySuggest';
 import { REFERENCE_VIEW_TYPE, ReferenceListView } from './view/referenceList';
+import { clearZoteroLinkCache } from './zotero/select';
 
 /** Shown at start-up and on a manual reload while no CSL JSON folder is configured. */
 const MISSING_FOLDER_NOTICE =
@@ -25,12 +27,14 @@ export default class CitationLinksPlugin extends Plugin {
 	bibliography!: Bibliography;
 	context!: CitationLinksContext;
 	private viewPlugin!: ViewPlugin<CitationViewPluginValue>;
+	private settingTab: CitationLinksSettingTab | null = null;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
 		this.formatter = new Formatter({ styleXml: STYLE_XML, locales: LOCALES, lang: DEFAULT_LANG });
 		this.bibliography = new Bibliography();
+		this.bibliography.setLibraryPreferences(this.settings.libraries);
 		this.register(() => this.bibliography.dispose());
 
 		this.context = {
@@ -44,6 +48,10 @@ export default class CitationLinksPlugin extends Plugin {
 
 		this.bibliography.onChanged((bibliography) => {
 			this.formatter.setItems(bibliography.all());
+			// Cached Zotero links were resolved for the previous winners; a new priority can change them.
+			clearZoteroLinkCache();
+			void this.rememberNewLibraries();
+			this.settingTab?.update();
 			this.refreshViews();
 		});
 
@@ -88,7 +96,8 @@ export default class CitationLinksPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new CitationLinksSettingTab(this.app, this));
+		this.settingTab = new CitationLinksSettingTab(this.app, this);
+		this.addSettingTab(this.settingTab);
 
 		this.app.workspace.onLayoutReady(() => {
 			void this.start();
@@ -103,6 +112,7 @@ export default class CitationLinksPlugin extends Plugin {
 			autocomplete: typeof record.autocomplete === 'boolean' ? record.autocomplete : DEFAULT_SETTINGS.autocomplete,
 			showReferenceList:
 				typeof record.showReferenceList === 'boolean' ? record.showReferenceList : DEFAULT_SETTINGS.showReferenceList,
+			libraries: parseLibraryPreferences(record.libraries),
 		};
 	}
 
@@ -129,6 +139,30 @@ export default class CitationLinksPlugin extends Plugin {
 	/** (Re)load the bibliography from the configured folder and start watching it. */
 	async applyFolder(): Promise<void> {
 		await this.bibliography.setFolder(resolveFolder(this.settings.folder));
+	}
+
+	/** Reload the bibliography with the library priority list from the settings. */
+	async applyLibraries(): Promise<void> {
+		this.bibliography.setLibraryPreferences(this.settings.libraries);
+		if (resolveFolder(this.settings.folder) === '') {
+			return;
+		}
+		await this.bibliography.reload();
+	}
+
+	/**
+	 * Store files that showed up in the folder for the first time at the end of
+	 * the priority list, so their place stays fixed when more files arrive later.
+	 */
+	private async rememberNewLibraries(): Promise<void> {
+		const present = this.bibliography.libraries.filter((library) => library.present).map((library) => library.file);
+		const merged = mergeLibraries(this.settings.libraries, present);
+		if (samePreferences(merged, this.settings.libraries)) {
+			return;
+		}
+		this.settings.libraries = merged;
+		this.bibliography.setLibraryPreferences(merged);
+		await this.saveSettings();
 	}
 
 	async reloadBibliography(): Promise<void> {

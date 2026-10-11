@@ -110,6 +110,8 @@ interface UserGroup {
 interface ExportedItem {
 	citationKey?: string;
 	select?: string;
+	title?: string;
+	DOI?: string;
 }
 
 interface ExportResult {
@@ -177,7 +179,7 @@ function parseExportResult(result: unknown): ExportResult {
 }
 
 type LibraryAttempt =
-	| { kind: 'found'; url: string }
+	| { kind: 'found'; url: string; item: ExportedItem }
 	| { kind: 'not-found' }
 	| { kind: 'error' };
 
@@ -215,7 +217,7 @@ async function trySelectUrlForLibrary(
 		const item =
 			exported.items.find((i) => i.citationKey === citekey) ??
 			exported.items[0];
-		return item?.select ? { kind: 'found', url: item.select } : { kind: 'not-found' };
+		return item?.select ? { kind: 'found', url: item.select, item } : { kind: 'not-found' };
 	} catch {
 		// A response we could not interpret is as good as no response.
 		return { kind: 'error' };
@@ -229,9 +231,85 @@ interface JsonRpcResolution {
 	allErrored: boolean;
 }
 
+/** One Zotero library in which the citekey was found. */
+export interface LibraryHit {
+	/** Library name as reported by Better BibTeX's `user.groups`. */
+	library: string;
+	url: string;
+	/** The item as exported by Better BibTeX JSON (Zotero field names). */
+	item: { title?: string; DOI?: string };
+}
+
+/** Lower-cased DOI without resolver prefix, or '' when there is none. */
+function normalizeDoi(doi: unknown): string {
+	if (typeof doi !== 'string') {
+		return '';
+	}
+	return doi
+		.trim()
+		.toLowerCase()
+		.replace(/^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:\s*)/, '');
+}
+
+/** Title reduced to lower-case letters and digits, so markup, case and punctuation do not matter. */
+function normalizeTitle(title: unknown): string {
+	if (typeof title !== 'string') {
+		return '';
+	}
+	return title
+		.replace(/<[^>]*>/g, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+/** True when a Zotero hit is the same work as the CSL item: same DOI, or same title when a DOI is missing. */
+function isSameWork(hit: LibraryHit['item'], item: CslItem): boolean {
+	const hitDoi = normalizeDoi(hit.DOI);
+	const itemDoi = normalizeDoi(item.DOI);
+	if (hitDoi !== '' && itemDoi !== '') {
+		return hitDoi === itemDoi;
+	}
+	const hitTitle = normalizeTitle(hit.title);
+	return hitTitle !== '' && hitTitle === normalizeTitle(item.title);
+}
+
+/**
+ * Picks the hit that belongs to the rendered item when a citekey exists in
+ * several Zotero libraries, so the Zotero button follows the library
+ * priority of the plugin settings:
+ *
+ * 1. Keep the hits that are the same work as the rendered CSL item (DOI,
+ *    else title) - this tells two different works with one key apart.
+ * 2. Among those, prefer the library whose name equals the name of the
+ *    CSL JSON file the item was read from (Better BibTeX proposes the
+ *    library name as export file name).
+ * 3. Otherwise keep Zotero's own order (My Library first).
+ */
+export function pickLibraryHit(
+	hits: readonly LibraryHit[],
+	item: CslItem | undefined,
+	sourceLabel: string | undefined,
+): LibraryHit | undefined {
+	if (hits.length <= 1) {
+		return hits[0];
+	}
+	const sameWork = item === undefined ? [] : hits.filter((hit) => isSameWork(hit.item, item));
+	const candidates = sameWork.length > 0 ? sameWork : hits;
+	const wanted = sourceLabel?.trim().toLowerCase();
+	if (wanted !== undefined && wanted !== '') {
+		const named = candidates.find((hit) => hit.library.trim().toLowerCase() === wanted);
+		if (named !== undefined) {
+			return named;
+		}
+	}
+	return candidates[0];
+}
+
 /** Queries every library the user has access to, in parallel, for the citekey. */
 async function resolveViaJsonRpc(
 	citekey: string,
+	item: CslItem | undefined,
+	sourceLabel: string | undefined,
 	deps: ZoteroLinkDeps,
 ): Promise<JsonRpcResolution> {
 	const groups = await callJsonRpc<UserGroup[]>(deps, 'user.groups', []);
@@ -242,10 +320,15 @@ async function resolveViaJsonRpc(
 		})),
 	);
 
+	const hits: LibraryHit[] = [];
 	for (const { group, attempt } of attempts) {
 		if (attempt.kind === 'found') {
-			return { url: attempt.url, library: group.name, allErrored: false };
+			hits.push({ library: group.name, url: attempt.url, item: attempt.item });
 		}
+	}
+	const hit = pickLibraryHit(hits, item, sourceLabel);
+	if (hit !== undefined) {
+		return { url: hit.url, library: hit.library, allErrored: false };
 	}
 
 	const allErrored =
@@ -293,7 +376,9 @@ function raceWithTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * 1. `item.custom.uri`, when present (set by a user-configured Better
  *    BibTeX postscript) - 'exact', no network request.
  * 2. Better BibTeX JSON-RPC: list the user's libraries, then ask each of
- *    them for the item in parallel; the first hit wins - 'exact'.
+ *    them for the item in parallel; with several hits, `pickLibraryHit`
+ *    chooses the one matching the rendered item and its CSL JSON file
+ *    (`sourceLabel`, the file name without ".json") - 'exact'.
  * 3. Every library answered but none had the citekey - 'not-found'.
  * 4. The JSON-RPC phase failed outright (server unreachable, request
  *    threw, response unparsable, or timed out) - 'unreachable', with a
@@ -312,6 +397,7 @@ export async function resolveZoteroSelectUrl(
 	citekey: string,
 	item: CslItem | undefined,
 	deps: ZoteroLinkDeps,
+	sourceLabel?: string,
 ): Promise<ZoteroLink> {
 	const cached = cache.get(citekey);
 	if (cached) {
@@ -331,7 +417,7 @@ export async function resolveZoteroSelectUrl(
 	const timeoutMs = deps.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 	let resolution: JsonRpcResolution;
 	try {
-		resolution = await raceWithTimeout(resolveViaJsonRpc(citekey, deps), timeoutMs);
+		resolution = await raceWithTimeout(resolveViaJsonRpc(citekey, item, sourceLabel, deps), timeoutMs);
 	} catch {
 		// Server unreachable, request failed, response unparsable, or timed out.
 		return { url: fallbackSelectUrl(citekey), status: 'unreachable' };
@@ -367,6 +453,7 @@ export async function prefetchZoteroLinks(
 	citekeys: string[],
 	items: (citekey: string) => CslItem | undefined,
 	deps: ZoteroLinkDeps,
+	sourceLabels?: (citekey: string) => string | undefined,
 ): Promise<Map<string, ZoteroLink>> {
 	const results = new Map<string, ZoteroLink>();
 	let stopped = false;
@@ -383,7 +470,7 @@ export async function prefetchZoteroLinks(
 				return;
 			}
 
-			const link = await resolveZoteroSelectUrl(citekey, items(citekey), deps);
+			const link = await resolveZoteroSelectUrl(citekey, items(citekey), deps, sourceLabels?.(citekey));
 			results.set(citekey, link);
 			if (link.status === 'unreachable') {
 				stopped = true;

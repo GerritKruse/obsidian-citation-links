@@ -1,4 +1,5 @@
 import { ItemView, Keymap, MarkdownView, Notice, setIcon, setTooltip, TFile, debounce, type WorkspaceLeaf } from 'obsidian';
+import { libraryLabel } from '../bibliography/libraries';
 import type { CitationLinksContext } from '../context';
 import { collectCitedKeys } from '../parser';
 import { nodeHttpRequest } from '../zotero/http';
@@ -150,6 +151,7 @@ export class ReferenceListView extends ItemView {
 			Array.from(buttons.keys()),
 			(citekey) => this.context.bibliography.get(citekey),
 			ZOTERO_DEPS,
+			(citekey) => this.sourceLabel(citekey),
 		);
 		if (generation !== this.renderGeneration) {
 			return;
@@ -162,9 +164,15 @@ export class ReferenceListView extends ItemView {
 		}
 	}
 
+	/** Name of the library (CSL JSON file) the rendered entry came from; steers the Zotero lookup. */
+	private sourceLabel(citekey: string): string | undefined {
+		const file = this.context.bibliography.sourceOf(citekey);
+		return file === undefined ? undefined : libraryLabel(file);
+	}
+
 	private async openInZotero(citekey: string, button: HTMLButtonElement): Promise<void> {
 		const item = this.context.bibliography.get(citekey);
-		const link = await resolveZoteroSelectUrl(citekey, item, ZOTERO_DEPS);
+		const link = await resolveZoteroSelectUrl(citekey, item, ZOTERO_DEPS, this.sourceLabel(citekey));
 		applyZoteroState(button, link);
 		switch (link.status) {
 			case 'exact':

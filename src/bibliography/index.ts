@@ -1,5 +1,6 @@
 import { Notice, debounce } from 'obsidian';
 import type { CslItem } from '../types';
+import type { LibraryPreference, LibraryStatus } from './libraries';
 import { loadFolder, type LoadResult } from './loader';
 import { watchFolder, type FolderWatcher } from './watcher';
 
@@ -31,12 +32,18 @@ export class Bibliography {
 	version = 0;
 
 	private items = new Map<string, CslItem>();
+	private sources = new Map<string, string>();
+	private libraryStatus: LibraryStatus[] = [];
+	private preferences: readonly LibraryPreference[] = [];
+	/** Incremented per setFolder/reload so a slower, superseded load cannot overwrite a newer one. */
+	private loadToken = 0;
 	private folder = '';
 	private watcher: FolderWatcher | null = null;
 	private listeners = new Set<BibliographyListener>();
 	private loadedOnce = false;
 	private disposed = false;
-	private pendingRetry: number | null = null;
+	/** A scheduled parse retry; cancelling it settles its waiting caller with null. */
+	private pendingRetry: { timer: number; settle: (summary: LoadSummary | null) => void } | null = null;
 	private lastDuplicateHash = '';
 	private lastSkippedHash = '';
 	private folderMissingNotified = false;
@@ -69,6 +76,21 @@ export class Bibliography {
 	/** The current index. Callers must not mutate it. */
 	all(): Map<string, CslItem> {
 		return this.items;
+	}
+
+	/** The file the winning item for `citekey` was read from. */
+	sourceOf(citekey: string): string | undefined {
+		return this.sources.get(citekey);
+	}
+
+	/** Every library from the last successful load, highest priority first. Callers must not mutate it. */
+	get libraries(): readonly LibraryStatus[] {
+		return this.libraryStatus;
+	}
+
+	/** Set the library priority list used by the next load. Does not reload by itself. */
+	setLibraryPreferences(preferences: readonly LibraryPreference[]): void {
+		this.preferences = preferences.map((entry) => ({ ...entry }));
 	}
 
 	onChanged(listener: BibliographyListener): () => void {
@@ -110,13 +132,16 @@ export class Bibliography {
 		this.folder = folder.trim();
 		this.folderMissingNotified = false;
 		if (this.folder === '') {
+			this.loadToken += 1;
 			this.items = new Map();
+			this.sources = new Map();
+			this.libraryStatus = [];
 			this.loadedOnce = false;
 			this.version += 1;
 			this.notify();
 			return null;
 		}
-		const summary = await this.load(0);
+		const summary = await this.load(0, ++this.loadToken);
 		if (summary !== null) {
 			this.startWatching();
 		}
@@ -126,7 +151,7 @@ export class Bibliography {
 	/** Reload all files of the current folder. Safe to call at any time. */
 	async reload(): Promise<LoadSummary | null> {
 		this.cancelRetry();
-		const summary = await this.load(0);
+		const summary = await this.load(0, ++this.loadToken);
 		if (summary !== null && this.watcher === null) {
 			this.startWatching();
 		}
@@ -140,14 +165,17 @@ export class Bibliography {
 		this.listeners.clear();
 	}
 
-	private async load(attempt: number): Promise<LoadSummary | null> {
-		if (this.disposed || this.folder === '') {
+	private async load(attempt: number, token: number): Promise<LoadSummary | null> {
+		if (this.disposed || this.folder === '' || token !== this.loadToken) {
 			return null;
 		}
 		let result: LoadResult;
 		try {
-			result = await loadFolder(this.folder);
+			result = await loadFolder(this.folder, this.preferences);
 		} catch (error) {
+			if (token !== this.loadToken) {
+				return null;
+			}
 			console.warn(`${LOG_PREFIX} Could not read the bibliography folder "${this.folder}"`, error);
 			if (!this.folderMissingNotified) {
 				this.folderMissingNotified = true;
@@ -155,7 +183,7 @@ export class Bibliography {
 			}
 			return null;
 		}
-		if (this.disposed) {
+		if (this.disposed || token !== this.loadToken) {
 			return null;
 		}
 		if (result.skippedFiles.length > 0 && attempt < RETRY_DELAYS_MS.length) {
@@ -165,10 +193,11 @@ export class Bibliography {
 				result.skippedFiles,
 			);
 			return new Promise((resolve) => {
-				this.pendingRetry = window.setTimeout(() => {
+				const timer = window.setTimeout(() => {
 					this.pendingRetry = null;
-					void this.load(attempt + 1).then(resolve);
+					void this.load(attempt + 1, token).then(resolve);
 				}, delay);
+				this.pendingRetry = { timer, settle: resolve };
 			});
 		}
 		return this.apply(result);
@@ -176,6 +205,8 @@ export class Bibliography {
 
 	private apply(result: LoadResult): LoadSummary {
 		this.items = result.items;
+		this.sources = result.sources;
+		this.libraryStatus = result.libraries;
 		this.loadedOnce = true;
 		this.version += 1;
 
@@ -183,7 +214,9 @@ export class Bibliography {
 		if (result.duplicates.length > 0 && duplicateHash !== this.lastDuplicateHash) {
 			const shown = result.duplicates.slice(0, 5).join(', ');
 			const more = result.duplicates.length > 5 ? ', ...' : '';
-			new Notice(`Citation Links: ${result.duplicates.length} duplicate citekey(s) across files: ${shown}${more}`);
+			new Notice(
+				`Citation Links: ${result.duplicates.length} citekey(s) occur more than once, the topmost library in the settings wins: ${shown}${more}`,
+			);
 		}
 		this.lastDuplicateHash = duplicateHash;
 
@@ -230,7 +263,8 @@ export class Bibliography {
 
 	private cancelRetry(): void {
 		if (this.pendingRetry !== null) {
-			window.clearTimeout(this.pendingRetry);
+			window.clearTimeout(this.pendingRetry.timer);
+			this.pendingRetry.settle(null);
 			this.pendingRetry = null;
 		}
 	}

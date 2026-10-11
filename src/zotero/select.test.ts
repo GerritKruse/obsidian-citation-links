@@ -4,6 +4,7 @@ import type { CslItem } from '../types';
 import {
 	clearZoteroLinkCache,
 	fallbackSelectUrl,
+	pickLibraryHit,
 	prefetchZoteroLinks,
 	resolveZoteroSelectUrl,
 	selectUrlFromCustomUri,
@@ -434,5 +435,71 @@ describe('prefetchZoteroLinks', () => {
 		// each worker gives up after its own first (unreachable) resolution,
 		// so far fewer than 10 resolutions' worth of requests go out.
 		expect(request.mock.calls.length).toBeLessThan(citekeys.length);
+	});
+});
+
+describe('pickLibraryHit', () => {
+	const mine = { library: 'Meine Bibliothek', url: 'zotero://select/library/items/MINE', item: { title: 'Shared Work', DOI: '10.1000/SHARED' } };
+	const lava = { library: 'LAVA', url: 'zotero://select/groups/1/items/LAVA', item: { title: 'Shared work.', DOI: 'https://doi.org/10.1000/shared' } };
+	const other = { library: 'Ctrl+References', url: 'zotero://select/groups/2/items/OTHER', item: { title: 'A different paper' } };
+
+	it('returns the only hit, or undefined for none', () => {
+		expect(pickLibraryHit([other], undefined, undefined)).toBe(other);
+		expect(pickLibraryHit([], undefined, undefined)).toBeUndefined();
+	});
+
+	it('keeps Zotero order when nothing else decides', () => {
+		expect(pickLibraryHit([mine, lava], undefined, undefined)).toBe(mine);
+	});
+
+	it('picks the hit that is the same work as the rendered item (DOI, else title)', () => {
+		expect(pickLibraryHit([other, mine], { id: 'k', DOI: 'doi:10.1000/shared' }, undefined)).toBe(mine);
+		expect(pickLibraryHit([mine, other], { id: 'k', title: 'A <i>different</i> paper' }, undefined)).toBe(other);
+	});
+
+	it('among copies of the same work, prefers the library named like the source file', () => {
+		const item = { id: 'k', DOI: '10.1000/shared' };
+		expect(pickLibraryHit([mine, lava, other], item, 'lava')).toBe(lava);
+		// The name only decides between copies of the rendered work, never across works.
+		expect(pickLibraryHit([mine, lava, other], item, 'Ctrl+References')).toBe(mine);
+	});
+
+	it('falls back to all hits when none matches the rendered item', () => {
+		expect(pickLibraryHit([mine, other], { id: 'k', title: 'Unrelated' }, 'Ctrl+References')).toBe(other);
+	});
+});
+
+describe('resolveZoteroSelectUrl with a citekey in several libraries', () => {
+	const citekey = 'shared2020';
+	const exports: Record<number, { select: string; title: string; DOI?: string }> = {
+		1: { select: 'zotero://select/library/items/MINE', title: 'Personal copy', DOI: '10.1/a' },
+		2: { select: 'zotero://select/groups/22/items/CTRL', title: 'Another work', DOI: '10.1/b' },
+		4: { select: 'zotero://select/groups/44/items/LAVA', title: 'Personal copy', DOI: '10.1/a' },
+	};
+	const request = vi.fn(async (params: RequestUrlParam): Promise<RequestUrlResponse> => {
+		const method = methodOf(params);
+		if (method === 'user.groups') {
+			return makeResponse({
+				result: [
+					{ id: 1, name: 'Meine Bibliothek' },
+					{ id: 2, name: 'Ctrl+References' },
+					{ id: 4, name: 'LAVA' },
+				],
+			});
+		}
+		const hit = exports[paramsOf(params)[2] as number];
+		return makeResponse(
+			hit === undefined ? notFoundError(citekey) : { result: JSON.stringify({ items: [{ citationKey: citekey, ...hit }] }) },
+		);
+	});
+
+	it('opens the library holding the rendered work, not just the first hit', async () => {
+		const result = await resolveZoteroSelectUrl(citekey, { id: citekey, DOI: '10.1/b' }, { request });
+		expect(result).toEqual({ url: 'zotero://select/groups/22/items/CTRL', status: 'exact', library: 'Ctrl+References' });
+	});
+
+	it('follows the source file among copies of the same work', async () => {
+		const result = await resolveZoteroSelectUrl(citekey, { id: citekey, DOI: '10.1/a' }, { request }, 'LAVA');
+		expect(result).toEqual({ url: 'zotero://select/groups/44/items/LAVA', status: 'exact', library: 'LAVA' });
 	});
 });

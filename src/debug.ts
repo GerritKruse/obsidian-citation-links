@@ -20,6 +20,11 @@ export function buildDebugReport(
 	lines.push(`Citation Links ${pluginVersion}`);
 	lines.push(`folder: ${folder || '(not set)'}`);
 	lines.push(`bibliography: ready=${String(bibliography.ready)} items=${bibliography.size} version=${bibliography.version}`);
+	bibliography.libraries.forEach((library, index) => {
+		lines.push(
+			`library ${index + 1}: ${library.file} enabled=${String(library.enabled)} present=${String(library.present)} items=${library.items ?? '-'}`,
+		);
+	});
 
 	const view = app.workspace.getActiveViewOfType(MarkdownView);
 	if (view === null) {

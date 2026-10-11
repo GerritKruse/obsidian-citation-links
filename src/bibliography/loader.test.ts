@@ -81,6 +81,70 @@ describe('loadFolder', () => {
 		expect(result.items.get('Dup2020')?.title).toBe('Title B');
 	});
 
+	describe('library priority', () => {
+		const shared = async (preferences: { file: string; enabled: boolean }[] = []) => {
+			const result = await loadFolder(fixture('priority'), preferences);
+			return { result, winner: result.items.get('Shared2020')?.title, source: result.sources.get('Shared2020') };
+		};
+
+		it('without a stored order, keeps the old winner (last file in plain sort order)', async () => {
+			const { result, winner, source } = await shared();
+			// Plain sort: "LAVA.json" < "My Library.json" < "ctrl.json"; ctrl.json used to be read last.
+			expect(result.libraries.map((library) => library.file)).toEqual(['ctrl.json', 'My Library.json', 'LAVA.json']);
+			expect(winner).toBe('Ctrl');
+			expect(source).toBe('ctrl.json');
+			expect(result.files).toEqual(['LAVA.json', 'My Library.json', 'ctrl.json']);
+		});
+
+		it('lets the topmost enabled library win and records where each item came from', async () => {
+			const { result, winner, source } = await shared([
+				{ file: 'LAVA.json', enabled: true },
+				{ file: 'My Library.json', enabled: true },
+				{ file: 'ctrl.json', enabled: true },
+			]);
+			expect(winner).toBe('Lava');
+			expect(source).toBe('LAVA.json');
+			expect(result.sources.get('Personal2020')).toBe('My Library.json');
+			expect([...result.duplicates].sort()).toEqual(['Inner2020', 'Shared2020']);
+		});
+
+		it('does not read a disabled library at all', async () => {
+			const { result, winner } = await shared([
+				{ file: 'LAVA.json', enabled: false },
+				{ file: 'My Library.json', enabled: true },
+				{ file: 'ctrl.json', enabled: true },
+			]);
+			expect(winner).toBe('Mine');
+			expect(result.items.has('Lava2021')).toBe(false);
+			expect(result.files).toEqual(['My Library.json', 'ctrl.json']);
+			expect(result.libraries[0]).toEqual({ file: 'LAVA.json', enabled: false, present: true, items: null });
+		});
+
+		it('appends files missing from the stored list with the lowest priority', async () => {
+			const { result, winner } = await shared([
+				{ file: 'My Library.json', enabled: true },
+				{ file: 'LAVA.json', enabled: true },
+			]);
+			expect(result.libraries.map((library) => library.file)).toEqual(['My Library.json', 'LAVA.json', 'ctrl.json']);
+			expect(winner).toBe('Mine');
+		});
+
+		it('keeps stored entries for files that are gone, marked as not present', async () => {
+			const { result } = await shared([
+				{ file: 'Gone.json', enabled: true },
+				{ file: 'LAVA.json', enabled: true },
+			]);
+			expect(result.libraries[0]).toEqual({ file: 'Gone.json', enabled: true, present: false, items: null });
+			expect(result.libraries.find((library) => library.file === 'LAVA.json')?.items).toBe(2);
+		});
+
+		it('still lets the later item win when one file holds a citekey twice', async () => {
+			const { result } = await shared([{ file: 'ctrl.json', enabled: true }]);
+			expect(result.items.get('Inner2020')?.title).toBe('Second');
+			expect(result.libraries[0]).toEqual({ file: 'ctrl.json', enabled: true, present: true, items: 3 });
+		});
+	});
+
 	it('returns an empty result for a directory with no json files', async () => {
 		const result = await loadFolder(fixture('empty'));
 
@@ -89,6 +153,7 @@ describe('loadFolder', () => {
 		expect(result.skippedItems).toBe(0);
 		expect(result.duplicates).toEqual([]);
 		expect(result.items.size).toBe(0);
+		expect(result.libraries).toEqual([]);
 	});
 
 	it('rejects when the directory does not exist', async () => {
