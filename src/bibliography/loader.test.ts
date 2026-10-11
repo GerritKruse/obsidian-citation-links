@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fs } from '../platform/node';
 import { loadFolder } from './loader';
+
+afterEach(() => {
+	vi.restoreAllMocks();
+});
 
 // import.meta.dirname is not guaranteed across every vitest/Node combination
 // this project might run under, so resolve the fixtures directory the safe
@@ -109,6 +114,7 @@ describe('loadFolder', () => {
 		});
 
 		it('does not read a disabled library at all', async () => {
+			const readFile = vi.spyOn(fs.promises, 'readFile');
 			const { result, winner } = await shared([
 				{ file: 'LAVA.json', enabled: false },
 				{ file: 'My Library.json', enabled: true },
@@ -116,6 +122,8 @@ describe('loadFolder', () => {
 			]);
 			expect(winner).toBe('Mine');
 			expect(result.items.has('Lava2021')).toBe(false);
+			const readPaths = readFile.mock.calls.map((call) => path.basename(String(call[0])));
+			expect(readPaths.sort()).toEqual(['My Library.json', 'ctrl.json']);
 			expect(result.files).toEqual(['My Library.json', 'ctrl.json']);
 			expect(result.libraries[0]).toEqual({ file: 'LAVA.json', enabled: false, present: true, items: null });
 		});

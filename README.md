@@ -39,7 +39,7 @@ Repeat this for every library you cite from – your personal library and each g
 
 Keep Zotero's proposed file name (the library's name) – Citation Links shows each file as a library under that name, and the "Zotero" button uses it to pick the right library when a citekey exists in several.
 
-The same citekey can still turn up in more than one library: Better BibTeX only keeps keys unique when it generates them on your machine, so keys that group members set, imported keys and keys typed by hand are never checked. Citation Links therefore lets you rank the libraries, see [Libraries](#libraries).
+If you export more than one library, open Zotero Settings → Better BibTeX → Citation Keys and set "Keep keys unique" to "across all libraries". By default Better BibTeX keeps generated keys unique only within each library; with this setting, newly generated keys are unique across all of them (existing keys change only once you refresh them). Keys that group members set, imported keys and keys typed by hand are never checked, though, so the same citekey can still turn up in more than one library – Citation Links therefore lets you rank the libraries, see [Libraries](#libraries).
 
 ### 3. Point the plugin at the folder (required)
 
@@ -55,12 +55,12 @@ This setting is mandatory: without it, nothing renders, an inline hint appears u
 
 Every `.json` file in the CSL JSON folder is treated as one library and listed under "Libraries" in the plugin settings, with its item count. Drag a row to change the order and use its toggle to switch the library on or off:
 
-- When a citekey occurs in more than one library, the topmost enabled library wins – for the rendered citation, the reference list, autocompletion and the "Zotero" button alike.
+- When a citekey occurs in more than one library, the topmost enabled library wins – for the rendered citation, the reference list and autocompletion. The "Zotero" button opens the copy of that entry in Zotero; see [Reference list](#reference-list) for how it finds it.
 - A library that is switched off is not read at all; its items disappear from citations and suggestions until it is switched on again.
 - A new file in the folder is added at the bottom of the list, so it never takes over citations that already resolve to another library.
 - On first use the list is ordered so that every citation resolves exactly as before the setting existed (until then the file read last in plain sort order won); rearrange it once to match your priorities.
 
-Each change takes effect immediately. When duplicates exist, a notice lists the affected citekeys whenever that set changes. A priority order picks the right copy when the same work sits in several libraries. If two different works share a citekey, only one of them can be cited under it, because both would share the literature note `@<citekey>.md` – give one of them a different citekey in Zotero instead.
+Each change takes effect immediately. When duplicates exist, a notice lists the affected citekeys at start-up and whenever that list changes. A priority order picks the right copy when the same work sits in several libraries. If two different works share a citekey, only one of them can be cited under it, because both would share the literature note `@<citekey>.md` – give one of them a different citekey in Zotero instead.
 
 ## Citation syntax
 
@@ -139,7 +139,7 @@ The citation style is fixed to APA 7th edition with the English (US) locale. Dis
 
 The "References" view in the right sidebar lists every work cited in the active note as an alphabetical APA 7 reference list, and updates as you switch notes or edit citations. Each entry has two buttons:
 
-- **Zotero** – opens the exact item in Zotero, in whichever library it lives in (your personal library or a group library). If the citekey exists in several Zotero libraries, it opens the copy that matches the rendered entry (same DOI, or same title), preferring the Zotero library named like the CSL JSON file the entry came from. This needs Zotero running with the Better BibTeX add-on; if it is not reachable, the button shows a notice instead of a link. If the citekey is not known to any Zotero library, the button is disabled, with a tooltip saying so.
+- **Zotero** – opens the exact item in Zotero, in whichever library it lives in (your personal library or a group library). If the citekey exists in several Zotero libraries, it opens the copy that matches the rendered entry (same DOI, or same title). When the same work sits in several of them, it opens the one whose Zotero library name matches the CSL JSON file the entry came from (case, spaces and punctuation are ignored), otherwise the first in Zotero's own order (My Library first). Keeping the file names Zotero proposes makes this work. This needs Zotero running with the Better BibTeX add-on; if it is not reachable, the button shows a notice instead of a link. If the citekey is not known to any Zotero library, the button is disabled, with a tooltip saying so.
 - **Open note** / **Create note** – opens the literature note, creating it first if it does not exist yet.
 
 In every entry the author and date, the part that corresponds to the in-text citation, are set in bold so an entry can be matched to a citation at a glance. DOIs (shown as https://doi.org/… links) and URLs, when present, are clickable and open in your default browser.

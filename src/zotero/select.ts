@@ -56,8 +56,13 @@ const GROUP_URI_RE = /^http:\/\/zotero\.org\/groups\/(\d+)\/items\/(\w+)$/;
 const USER_URI_RE =
 	/^http:\/\/zotero\.org\/users\/(?:local\/)?[^/]+\/items\/(\w+)$/;
 
-/** Exact links resolved via JSON-RPC, keyed by citekey. Never holds fallbacks. */
-const cache = new Map<string, ZoteroLink>();
+/**
+ * Exact links keyed by citekey, together with the CSL JSON file (library) the
+ * rendered item came from when the link was resolved. A lookup for another
+ * source - after the library order changed, say - misses and resolves anew.
+ * Never holds fallbacks.
+ */
+const cache = new Map<string, { link: ZoteroLink; source: string | undefined }>();
 
 /** Clears the module-level resolution cache. Exposed for tests. */
 export function clearZoteroLinkCache(): void {
@@ -262,6 +267,11 @@ function normalizeTitle(title: unknown): string {
 		.replace(/[^\p{L}\p{N}]+/gu, '');
 }
 
+/** Library or file name reduced to lower-case letters and digits, so "Ctrl+References" matches "ctrl-references". */
+function normalizeName(name: string | undefined): string {
+	return (name ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
 /** True when a Zotero hit is the same work as the CSL item: same DOI, or same title when a DOI is missing. */
 function isSameWork(hit: LibraryHit['item'], item: CslItem): boolean {
 	const hitDoi = normalizeDoi(hit.DOI);
@@ -280,9 +290,10 @@ function isSameWork(hit: LibraryHit['item'], item: CslItem): boolean {
  *
  * 1. Keep the hits that are the same work as the rendered CSL item (DOI,
  *    else title) - this tells two different works with one key apart.
- * 2. Among those, prefer the library whose name equals the name of the
- *    CSL JSON file the item was read from (Better BibTeX proposes the
- *    library name as export file name).
+ * 2. Among those, prefer the library whose name matches the name of the
+ *    CSL JSON file the item was read from, ignoring case, spaces and
+ *    punctuation (Better BibTeX proposes the library name as export file
+ *    name).
  * 3. Otherwise keep Zotero's own order (My Library first).
  */
 export function pickLibraryHit(
@@ -295,9 +306,9 @@ export function pickLibraryHit(
 	}
 	const sameWork = item === undefined ? [] : hits.filter((hit) => isSameWork(hit.item, item));
 	const candidates = sameWork.length > 0 ? sameWork : hits;
-	const wanted = sourceLabel?.trim().toLowerCase();
-	if (wanted !== undefined && wanted !== '') {
-		const named = candidates.find((hit) => hit.library.trim().toLowerCase() === wanted);
+	const wanted = normalizeName(sourceLabel);
+	if (wanted !== '') {
+		const named = candidates.find((hit) => normalizeName(hit.library) === wanted);
 		if (named !== undefined) {
 			return named;
 		}
@@ -385,9 +396,9 @@ function raceWithTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  *    fallback link that Better BibTeX can still resolve by citekey, but
  *    only within the user's own library.
  *
- * Only 'exact' results are cached; 'not-found' and 'unreachable' are
- * re-attempted on every call, since either can change the moment Zotero is
- * started or the item is added.
+ * Only 'exact' results are cached, per citekey and `sourceLabel`;
+ * 'not-found' and 'unreachable' are re-attempted on every call, since
+ * either can change the moment Zotero is started or the item is added.
  *
  * The JSON-RPC phase (steps 2-3) is bounded by `deps.timeoutMs` via
  * `Promise.race`; the underlying request itself is not aborted. This
@@ -400,8 +411,8 @@ export async function resolveZoteroSelectUrl(
 	sourceLabel?: string,
 ): Promise<ZoteroLink> {
 	const cached = cache.get(citekey);
-	if (cached) {
-		return cached;
+	if (cached && cached.source === sourceLabel) {
+		return cached.link;
 	}
 
 	const customUri = item?.custom?.uri;
@@ -409,7 +420,7 @@ export async function resolveZoteroSelectUrl(
 		const url = selectUrlFromCustomUri(customUri);
 		if (url) {
 			const link: ZoteroLink = { url, status: 'exact' };
-			cache.set(citekey, link);
+			cache.set(citekey, { link, source: sourceLabel });
 			return link;
 		}
 	}
@@ -428,7 +439,7 @@ export async function resolveZoteroSelectUrl(
 			resolution.library !== undefined
 				? { url: resolution.url, status: 'exact', library: resolution.library }
 				: { url: resolution.url, status: 'exact' };
-		cache.set(citekey, link);
+		cache.set(citekey, { link, source: sourceLabel });
 		return link;
 	}
 

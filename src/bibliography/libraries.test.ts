@@ -77,21 +77,25 @@ describe('reorderPresent', () => {
 	];
 	const present = new Set(['a.json', 'b.json', 'c.json']);
 
-	it('moves an entry by its index among the present files and keeps missing ones at the end', () => {
+	it('moves an entry by its index among the present files and leaves missing ones in place', () => {
 		expect(reorderPresent(preferences, present, 2, 0)).toEqual([
 			{ file: 'c.json', enabled: true },
+			{ file: 'gone.json', enabled: true },
 			{ file: 'a.json', enabled: true },
 			{ file: 'b.json', enabled: false },
-			{ file: 'gone.json', enabled: true },
 		]);
+	});
+
+	it('changes nothing when an entry is dropped where it was', () => {
+		expect(reorderPresent(preferences, present, 1, 1)).toEqual(preferences);
 	});
 
 	it('clamps the target index and ignores an unknown source index', () => {
 		expect(reorderPresent(preferences, present, 0, 99).map((entry) => entry.file)).toEqual([
 			'b.json',
+			'gone.json',
 			'c.json',
 			'a.json',
-			'gone.json',
 		]);
 		expect(reorderPresent(preferences, present, 7, 0)).toEqual(preferences);
 	});

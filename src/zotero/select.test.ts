@@ -464,6 +464,11 @@ describe('pickLibraryHit', () => {
 		expect(pickLibraryHit([mine, lava, other], item, 'Ctrl+References')).toBe(mine);
 	});
 
+	it('matches the source file name ignoring case, spaces and punctuation', () => {
+		const ctrl = { ...lava, library: 'Ctrl+References' };
+		expect(pickLibraryHit([mine, ctrl], { id: 'k', DOI: '10.1000/shared' }, 'ctrl-references')).toBe(ctrl);
+	});
+
 	it('falls back to all hits when none matches the rendered item', () => {
 		expect(pickLibraryHit([mine, other], { id: 'k', title: 'Unrelated' }, 'Ctrl+References')).toBe(other);
 	});
@@ -496,6 +501,17 @@ describe('resolveZoteroSelectUrl with a citekey in several libraries', () => {
 	it('opens the library holding the rendered work, not just the first hit', async () => {
 		const result = await resolveZoteroSelectUrl(citekey, { id: citekey, DOI: '10.1/b' }, { request });
 		expect(result).toEqual({ url: 'zotero://select/groups/22/items/CTRL', status: 'exact', library: 'Ctrl+References' });
+	});
+
+	it('resolves anew when the entry now comes from another library, instead of reusing the cached link', async () => {
+		const item = { id: citekey, DOI: '10.1/a' };
+		const first = await resolveZoteroSelectUrl(citekey, item, { request }, 'Meine Bibliothek');
+		expect(first.library).toBe('Meine Bibliothek');
+		const calls = request.mock.calls.length;
+		expect((await resolveZoteroSelectUrl(citekey, item, { request }, 'Meine Bibliothek')).library).toBe('Meine Bibliothek');
+		expect(request.mock.calls.length).toBe(calls);
+		expect((await resolveZoteroSelectUrl(citekey, item, { request }, 'LAVA')).library).toBe('LAVA');
+		expect(request.mock.calls.length).toBeGreaterThan(calls);
 	});
 
 	it('follows the source file among copies of the same work', async () => {

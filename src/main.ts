@@ -14,7 +14,6 @@ import { Formatter } from './render/formatter';
 import { CitationLinksSettingTab, DEFAULT_SETTINGS, resolveFolder, type CitationLinksSettings } from './settings';
 import { CitekeySuggest } from './suggest/citekeySuggest';
 import { REFERENCE_VIEW_TYPE, ReferenceListView } from './view/referenceList';
-import { clearZoteroLinkCache } from './zotero/select';
 
 /** Shown at start-up and on a manual reload while no CSL JSON folder is configured. */
 const MISSING_FOLDER_NOTICE =
@@ -48,8 +47,6 @@ export default class CitationLinksPlugin extends Plugin {
 
 		this.bibliography.onChanged((bibliography) => {
 			this.formatter.setItems(bibliography.all());
-			// Cached Zotero links were resolved for the previous winners; a new priority can change them.
-			clearZoteroLinkCache();
 			void this.rememberNewLibraries();
 			this.settingTab?.update();
 			this.refreshViews();

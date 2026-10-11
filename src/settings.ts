@@ -1,5 +1,5 @@
 import { fs, os, path } from './platform/node';
-import { PluginSettingTab, type App, type SettingDefinition, type SettingDefinitionItem } from 'obsidian';
+import { PluginSettingTab, debounce, type App, type SettingDefinition, type SettingDefinitionItem } from 'obsidian';
 import { libraryLabel, reorderPresent, type LibraryPreference, type LibraryStatus } from './bibliography/libraries';
 import type CitationLinksPlugin from './main';
 
@@ -23,6 +23,9 @@ export const DEFAULT_SETTINGS: CitationLinksSettings = {
 
 /** Control keys of the per-library toggles are this prefix plus the file name. */
 const LIBRARY_KEY_PREFIX = 'library:';
+
+/** The folder field commits on every keystroke; load only once typing pauses, not every intermediate folder. */
+const FOLDER_APPLY_DELAY_MS = 800;
 
 /** Expand a leading `~` to the home directory and trim whitespace. */
 export function resolveFolder(folder: string): string {
@@ -53,6 +56,14 @@ export function validateFolder(folder: string): string | undefined {
 
 /** Settings tab: the CSL JSON folder, the autocompletion and reference list toggles, and the library priority list. */
 export class CitationLinksSettingTab extends PluginSettingTab {
+	private readonly applyFolderSoon = debounce(
+		() => {
+			void this.citationLinks.applyFolder();
+		},
+		FOLDER_APPLY_DELAY_MS,
+		true,
+	);
+
 	constructor(
 		app: App,
 		private readonly citationLinks: CitationLinksPlugin,
@@ -95,8 +106,8 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 				name: 'Library priority',
 				desc:
 					'Each CSL JSON file in the folder is one library. When a citekey occurs in more than one, the topmost ' +
-					'enabled library wins – for the citation, the reference list, autocompletion and the Zotero button. ' +
-					'Drag to reorder; turn a library off to ignore its file.',
+					'enabled library wins – for the citation, the reference list and autocompletion; the Zotero button opens ' +
+					'the matching copy. Drag to reorder; turn a library off to ignore its file.',
 			},
 			{
 				type: 'list',
@@ -110,24 +121,38 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 		];
 	}
 
-	/** One row per CSL JSON file in the folder, in priority order, each with an on/off toggle. */
+	/**
+	 * One row per CSL JSON file in the folder, each with an on/off toggle. The
+	 * rows follow the stored order - the same list the drag indices are applied
+	 * to - and take item counts from the last load.
+	 */
 	private libraryItems(): SettingDefinition[] {
-		const shown = this.citationLinks.bibliography.libraries.filter((library) => library.present);
-		return shown.map((library, index) => ({
-			name: libraryLabel(library.file),
-			desc: describeLibrary(library, index),
+		const status = this.presentLibraries();
+		const shown = this.librariesForEditing().filter((entry) => status.has(entry.file));
+		return shown.map((entry, index) => ({
+			name: libraryLabel(entry.file),
+			desc: describeLibrary(entry, status.get(entry.file), index),
 			control: {
 				type: 'toggle',
-				key: LIBRARY_KEY_PREFIX + library.file,
+				key: LIBRARY_KEY_PREFIX + entry.file,
 			},
 		}));
 	}
 
-	private async reorderLibraries(from: number, to: number): Promise<void> {
-		const present = new Set(
-			this.citationLinks.bibliography.libraries.filter((library) => library.present).map((library) => library.file),
+	/** Libraries whose file was in the folder at the last load, by file name. */
+	private presentLibraries(): Map<string, LibraryStatus> {
+		return new Map(
+			this.citationLinks.bibliography.libraries
+				.filter((library) => library.present)
+				.map((library) => [library.file, library] as const),
 		);
+	}
+
+	private async reorderLibraries(from: number, to: number): Promise<void> {
+		const present = new Set(this.presentLibraries().keys());
 		this.citationLinks.settings.libraries = reorderPresent(this.librariesForEditing(), present, from, to);
+		// Refresh the rows (rank labels) right away rather than after the reload.
+		this.update();
 		await this.citationLinks.saveSettings();
 		await this.citationLinks.applyLibraries();
 	}
@@ -168,6 +193,7 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 			this.citationLinks.settings.libraries = this.librariesForEditing().map((entry) =>
 				entry.file === file ? { file, enabled: value === true } : entry,
 			);
+			this.update();
 			await this.citationLinks.saveSettings();
 			await this.citationLinks.applyLibraries();
 			return;
@@ -176,7 +202,7 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 			case 'folder':
 				this.citationLinks.settings.folder = typeof value === 'string' ? value.trim() : '';
 				await this.citationLinks.saveSettings();
-				await this.citationLinks.applyFolder();
+				this.applyFolderSoon();
 				return;
 			case 'autocomplete':
 				this.citationLinks.settings.autocomplete = value === true;
@@ -198,13 +224,17 @@ export class CitationLinksSettingTab extends PluginSettingTab {
 }
 
 /** Row description: priority rank and what the last load read from the file. */
-function describeLibrary(library: LibraryStatus, index: number): string {
+function describeLibrary(entry: LibraryPreference, status: LibraryStatus | undefined, index: number): string {
 	const rank = index === 0 ? 'Highest priority' : `Priority ${index + 1}`;
-	if (!library.enabled) {
+	if (!entry.enabled) {
 		return `${rank} · off, not loaded`;
 	}
-	if (library.items === null) {
+	if (status === undefined || !status.enabled) {
+		// Switched on a moment ago; the reload that reads it is still running.
+		return `${rank} · loading…`;
+	}
+	if (status.items === null) {
 		return `${rank} · could not be read`;
 	}
-	return `${rank} · ${library.items} ${library.items === 1 ? 'item' : 'items'}`;
+	return `${rank} · ${status.items} ${status.items === 1 ? 'item' : 'items'}`;
 }

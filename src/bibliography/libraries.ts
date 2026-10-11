@@ -85,7 +85,8 @@ export function samePreferences(a: readonly LibraryPreference[], b: readonly Lib
 /**
  * Moves the entry at `from` to `to`, where both indices count only the files
  * that are present in the folder (the ones the settings list shows). Entries
- * for missing files keep their relative order and end up after the present ones.
+ * for missing files stay exactly where they are, so a file that comes back
+ * finds its old place.
  */
 export function reorderPresent(
 	preferences: readonly LibraryPreference[],
@@ -93,14 +94,23 @@ export function reorderPresent(
 	from: number,
 	to: number,
 ): LibraryPreference[] {
-	const visible = preferences.filter((entry) => present.has(entry.file));
-	const hidden = preferences.filter((entry) => !present.has(entry.file));
+	const slots: number[] = [];
+	preferences.forEach((entry, index) => {
+		if (present.has(entry.file)) {
+			slots.push(index);
+		}
+	});
+	const visible = slots.map((slot) => preferences[slot] as LibraryPreference);
 	const [moved] = visible.splice(from, 1);
 	if (moved === undefined) {
 		return preferences.slice();
 	}
 	visible.splice(Math.max(0, Math.min(to, visible.length)), 0, moved);
-	return visible.concat(hidden);
+	const result = preferences.slice();
+	slots.forEach((slot, index) => {
+		result[slot] = visible[index] as LibraryPreference;
+	});
+	return result;
 }
 
 /** The display name of a library: its file name without the ".json" extension. */

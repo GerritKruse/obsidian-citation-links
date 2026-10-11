@@ -37,6 +37,8 @@ export class Bibliography {
 	private preferences: readonly LibraryPreference[] = [];
 	/** Incremented per setFolder/reload so a slower, superseded load cannot overwrite a newer one. */
 	private loadToken = 0;
+	/** The newest load; a superseded caller waits for it instead of reporting a failure. */
+	private currentLoad: Promise<LoadSummary | null> = Promise.resolve(null);
 	private folder = '';
 	private watcher: FolderWatcher | null = null;
 	private listeners = new Set<BibliographyListener>();
@@ -133,6 +135,7 @@ export class Bibliography {
 		this.folderMissingNotified = false;
 		if (this.folder === '') {
 			this.loadToken += 1;
+			this.currentLoad = Promise.resolve(null);
 			this.items = new Map();
 			this.sources = new Map();
 			this.libraryStatus = [];
@@ -141,7 +144,7 @@ export class Bibliography {
 			this.notify();
 			return null;
 		}
-		const summary = await this.load(0, ++this.loadToken);
+		const summary = await this.startLoad();
 		if (summary !== null) {
 			this.startWatching();
 		}
@@ -151,7 +154,7 @@ export class Bibliography {
 	/** Reload all files of the current folder. Safe to call at any time. */
 	async reload(): Promise<LoadSummary | null> {
 		this.cancelRetry();
-		const summary = await this.load(0, ++this.loadToken);
+		const summary = await this.startLoad();
 		if (summary !== null && this.watcher === null) {
 			this.startWatching();
 		}
@@ -163,6 +166,22 @@ export class Bibliography {
 		this.stopWatching();
 		this.cancelRetry();
 		this.listeners.clear();
+	}
+
+	/**
+	 * Starts a load that supersedes any running one. A caller whose load was
+	 * superseded (or whose pending retry was cancelled) gets the result of the
+	 * newest load, so only a real failure comes back as null.
+	 */
+	private async startLoad(): Promise<LoadSummary | null> {
+		let token = ++this.loadToken;
+		this.currentLoad = this.load(0, token);
+		let summary = await this.currentLoad;
+		while (token !== this.loadToken) {
+			token = this.loadToken;
+			summary = await this.currentLoad;
+		}
+		return summary;
 	}
 
 	private async load(attempt: number, token: number): Promise<LoadSummary | null> {
@@ -215,7 +234,7 @@ export class Bibliography {
 			const shown = result.duplicates.slice(0, 5).join(', ');
 			const more = result.duplicates.length > 5 ? ', ...' : '';
 			new Notice(
-				`Citation Links: ${result.duplicates.length} citekey(s) occur more than once, the topmost library in the settings wins: ${shown}${more}`,
+				`Citation Links: ${result.duplicates.length} duplicate citekey(s): ${shown}${more}. Across libraries, the topmost one in the settings wins.`,
 			);
 		}
 		this.lastDuplicateHash = duplicateHash;
