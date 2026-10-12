@@ -1,0 +1,28 @@
+name: Branch notes removed
+
+# Temporary branch notes (HANDOFF.md and the link to it in AGENTS.md) help
+# agents working on a feature branch but must not reach main. This check
+# fails every pull request into main until both are gone.
+
+on:
+    pull_request:
+        branches: [main]
+
+jobs:
+    check:
+        name: Branch notes removed
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v6
+            - name: Fail while HANDOFF.md or its AGENTS.md link is present
+              run: |
+                  status=0
+                  if [ -e HANDOFF.md ]; then
+                    echo "::error file=HANDOFF.md::Delete the temporary branch notes before merging into main."
+                    status=1
+                  fi
+                  if grep -n "HANDOFF.md" AGENTS.md; then
+                    echo "::error file=AGENTS.md::Remove the link to HANDOFF.md before merging into main."
+                    status=1
+                  fi
+                  exit $status

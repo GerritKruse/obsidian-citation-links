@@ -1,5 +1,7 @@
 # Obsidian community plugin
 
+> **Branch notes – remove this line and `HANDOFF.md` when merging into `main`.** Before working on this branch, read [HANDOFF.md](HANDOFF.md): what the plugin does, what this branch changed and why, verified facts about Better BibTeX, Zotero and the Obsidian settings API, and the open items.
+
 ## Project overview
 
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
