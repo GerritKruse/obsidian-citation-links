@@ -20,6 +20,20 @@ export function buildDebugReport(
 	lines.push(`Citation Links ${pluginVersion}`);
 	lines.push(`folder: ${folder || '(not set)'}`);
 	lines.push(`bibliography: ready=${String(bibliography.ready)} items=${bibliography.size} version=${bibliography.version}`);
+	const priority = bibliography.ranking.map((rank) => {
+		const details = [`${rank.items} ${rank.items === 1 ? 'item' : 'items'}`];
+		if (rank.overridden.length > 0) {
+			details.push(`${rank.overridden.length} overridden`);
+		}
+		if (rank.sameFileDuplicates.length > 0) {
+			details.push(`${rank.sameFileDuplicates.length} duplicated inside`);
+		}
+		if (rank.skipped) {
+			details.push('could not be parsed');
+		}
+		return `${rank.name} (${details.join(', ')})`;
+	});
+	lines.push(`file priority: ${priority.join(' > ') || '(none)'}`);
 
 	const view = app.workspace.getActiveViewOfType(MarkdownView);
 	if (view === null) {

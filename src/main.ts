@@ -25,12 +25,15 @@ export default class CitationLinksPlugin extends Plugin {
 	bibliography!: Bibliography;
 	context!: CitationLinksContext;
 	private viewPlugin!: ViewPlugin<CitationViewPluginValue>;
+	private settingTab: CitationLinksSettingTab | null = null;
+	/** Tail of the settings save queue, see `saveSettings`. */
+	private saveChain: Promise<void> = Promise.resolve();
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
 		this.formatter = new Formatter({ styleXml: STYLE_XML, locales: LOCALES, lang: DEFAULT_LANG });
-		this.bibliography = new Bibliography();
+		this.bibliography = new Bibliography(() => this.settings.fileOrder);
 		this.register(() => this.bibliography.dispose());
 
 		this.context = {
@@ -45,6 +48,9 @@ export default class CitationLinksPlugin extends Plugin {
 		this.bibliography.onChanged((bibliography) => {
 			this.formatter.setItems(bibliography.all());
 			this.refreshViews();
+			this.rememberNewFiles();
+			// New or removed files and changed counts show up in the file priority list while the tab is open.
+			this.settingTab?.refresh();
 		});
 
 		// Load the bibliography before any editor or reading view is rendered. Embedded Live Preview
@@ -88,7 +94,8 @@ export default class CitationLinksPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new CitationLinksSettingTab(this.app, this));
+		this.settingTab = new CitationLinksSettingTab(this.app, this);
+		this.addSettingTab(this.settingTab);
 
 		this.app.workspace.onLayoutReady(() => {
 			void this.start();
@@ -103,11 +110,50 @@ export default class CitationLinksPlugin extends Plugin {
 			autocomplete: typeof record.autocomplete === 'boolean' ? record.autocomplete : DEFAULT_SETTINGS.autocomplete,
 			showReferenceList:
 				typeof record.showReferenceList === 'boolean' ? record.showReferenceList : DEFAULT_SETTINGS.showReferenceList,
+			// Always a fresh array, never DEFAULT_SETTINGS.fileOrder itself.
+			fileOrder: Array.isArray(record.fileOrder)
+				? record.fileOrder.filter((name): name is string => typeof name === 'string')
+				: [],
 		};
 	}
 
+	/**
+	 * Persist the settings. Saves run one after the other: Node's writeFile is not safe when several
+	 * writes to the same file overlap, and a held reorder shortcut triggers dozens of saves per second.
+	 * Each queued save writes the settings as they are when it runs, so a burst ends with the latest
+	 * state on disk. A failed save is logged and does not stop later ones; its own caller still sees
+	 * the rejection.
+	 */
 	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
+		const save = this.saveChain.then(() => this.saveData(this.settings));
+		this.saveChain = save.catch((error: unknown) => {
+			console.error('[citation-links] Could not save the settings', error);
+		});
+		return save;
+	}
+
+	/**
+	 * Append files seen for the first time to the saved file order, so a file that shows up later
+	 * always lands at the bottom – even before the user has reordered anything. Unsaved names already
+	 * rank last (plain-sorted) in `rankFiles`, so appending them in ranking order keeps the ranking as is.
+	 */
+	private rememberNewFiles(): void {
+		const known = new Set(this.settings.fileOrder);
+		const added = this.bibliography.ranking.map((rank) => rank.name).filter((name) => !known.has(name));
+		if (added.length === 0) {
+			return;
+		}
+		this.settings.fileOrder = [...this.settings.fileOrder, ...added];
+		// The queue already logs a failed save; there is nothing left to handle here.
+		this.saveSettings().catch(() => undefined);
+	}
+
+	/** Apply a new file priority: re-merge the loaded bibliography right away and save in the background. */
+	setFileOrder(order: readonly string[]): void {
+		this.settings.fileOrder = [...order];
+		this.bibliography.applyPriority();
+		// The queue already logs a failed save; there is nothing left to handle here.
+		this.saveSettings().catch(() => undefined);
 	}
 
 	/** Once the workspace exists, make sure the reference list is present if wanted. */

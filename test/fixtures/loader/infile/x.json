@@ -1,0 +1,17 @@
+[
+	{
+		"id": "Same2020",
+		"type": "article-journal",
+		"title": "First title"
+	},
+	{
+		"id": "Other2020",
+		"type": "article-journal",
+		"title": "Other title"
+	},
+	{
+		"id": "Same2020",
+		"type": "article-journal",
+		"title": "Second title"
+	}
+]

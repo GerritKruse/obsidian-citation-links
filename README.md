@@ -37,11 +37,15 @@ In Zotero, right-click a library and choose "Export Library…", then:
 
 Repeat this for every library you cite from – your personal library and each group library – saving all of them into that same folder. Better BibTeX rewrites each file whenever the corresponding library changes, so the exports stay current without any manual step.
 
-If you export more than one library, open Zotero Settings → Better BibTeX → Citation Keys and set the key uniqueness to "across all libraries", so the same citekey is never reused between them.
+If you export more than one library, open Zotero Settings → Better BibTeX → Citation Keys and set the key uniqueness to "across all libraries", so the same citekey is never reused between them. The same item showing up in two exports (for example a library export and an export of one of its collections) is fine – [file priority](#3-point-the-plugin-at-the-folder-required) decides which entry is used.
 
 ### 3. Point the plugin at the folder (required)
 
 This setting is mandatory: without it, nothing renders, an inline hint appears under the empty field in the settings tab, and a notice shows at start-up. In Obsidian, open Settings → Citation Links and set "CSL JSON folder" to the path of that folder (`~` is expanded to your home directory). Every `.json` file in the folder is merged into one in-memory bibliography, the folder is watched for changes, and the "Reload bibliography" command forces an immediate reload – its notice reports how many items were loaded from how many files, which is a good first check if something looks off.
+
+**File priority.** When several exports contain the same citekey, the entry from the file higher up in Settings → Citation Links → File priority is used. The list shows every `.json` file of the folder with its number of items and, where it applies, how many of its citekeys a file above overrides. Reorder it by dragging a row by its handle, or by focusing a row and pressing Alt+Up or Alt+Down (Option on macOS).
+
+The files found the first time are listed by plain name comparison (upper-case letters before lower-case ones, so `Zeta.json` comes before `alpha.json`). Every file that shows up later goes to the bottom. File names are matched exactly, so a renamed file counts as a new one; a file that is missing for a while keeps its place. Duplicate citekeys never trigger a pop-up. A citekey that occurs twice inside one file is counted in that file's row, and the last entry in the file is used.
 
 ### Other settings
 
@@ -217,6 +221,8 @@ The only network access the plugin makes is to `http://127.0.0.1:23119/better-bi
 If citations stay ordinary wikilinks instead of rendering, the CSL JSON folder is almost always not set or wrong – check Settings → Citation Links, then use the "Reload bibliography" command.
 
 Run the "Copy debug report" command to copy a short plain-text report (bibliography state, active note, editor state) to the clipboard; it also shows as a notice. It has no default hotkey, so assign one yourself, or enable the "Command palette" core plugin to run it by name.
+
+If a citation shows data from the wrong export, for example an older or less complete entry, check the file priority list in Settings → Citation Links: when a citekey appears in several files, the file higher up in that list wins.
 
 If the bibliography itself looks wrong, use the "Reload bibliography" command and check its notice: it reports how many items were loaded from how many files, which usually shows right away whether the configured folder or the Zotero exports are the problem.
 
